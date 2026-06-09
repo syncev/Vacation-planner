@@ -128,15 +128,15 @@ h3{font-size:15px;font-weight:500;margin-bottom:.75rem}
     <button class="tab active" data-tab="resumen"><i class="ti ti-layout-dashboard"></i> Resumen</button>
     <button class="tab" data-tab="vuelos"><i class="ti ti-plane"></i> Vuelos</button>
     <button class="tab" data-tab="hospedaje"><i class="ti ti-home"></i> Hospedaje</button>
-    <button class="tab" data-tab="ski"><i class="ti ti-mountain"></i> Ski & Equipo</button>
-    <button class="tab" data-tab="actividades"><i class="ti ti-map"></i> Actividades</button>
     <button class="tab" data-tab="traslados"><i class="ti ti-car"></i> Traslados</button>
+    <button class="tab" data-tab="actividades"><i class="ti ti-map"></i> Actividades</button>
+    <button class="tab" data-tab="ski"><i class="ti ti-mountain"></i> Ski & Equipo</button>
     <button id="tab-add-btn" class="tab-add" onclick="formCustomTab(null)" title="Nueva sección"><i class="ti ti-plus"></i></button>
   </div>
   <div id="panel-resumen" class="panel active"></div>
   <div id="panel-vuelos" class="panel"></div>
   <div id="panel-hospedaje" class="panel"></div>
-  <div id="panel-ski" class="panel"></div>
+  <div id="panel-traslados" class="panel"></div>
   <div id="panel-actividades" class="panel"></div>
   <div id="panel-traslados" class="panel"></div>
 </div>
@@ -169,7 +169,8 @@ const DEFAULT = {
   ski: { dias: [], pase: [], equipo: [], ropa: [] },
   actividades: [],
   traslados: [],
-  customTabs: []
+  customTabs: [],
+  skiVisible: true
 };
 
 function migrateState(s){
@@ -183,6 +184,7 @@ function migrateState(s){
   if(s.ski&&!s.ski.dias)s.ski.dias=[];
   if(s.actividades)s.actividades=s.actividades.map(a=>({fecha:'',fechaFin:'',...a}));
   if(!s.customTabs)s.customTabs=[];
+  if(s.skiVisible===undefined)s.skiVisible=true;
   return s;
 }
 
@@ -669,7 +671,7 @@ function renderSki(){
   const ropa=getSelected(state.ski.ropa);
   const total=(pase?.precio||0)+(equipo?.precio||0)+(ropa?.precio||0);
   const skiDiasCnt=(state.ski.dias||[]).length;
-  $('panel-ski').innerHTML=`<h2>Ski & Equipo <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">Cerro Catedral</span></h2>
+  $('panel-ski').innerHTML=`<div class="section-header"><h3>Ski & Equipo</h3><button class="btn-icon" style="color:#E24B4A" onclick="deleteSki()" title="Eliminar sección"><i class="ti ti-trash"></i></button></div>
   ${total>0?`<div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.75rem 1rem;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;color:var(--color-text-secondary)">Costo estimado p/persona${skiDiasCnt>1?' · '+skiDiasCnt+' días':''}</span><span style="font-weight:500;font-size:15px">$${fmt(total*Math.max(skiDiasCnt,1))}</span></div>`:''}
   ${renderSkiDias()}
   <div class="divider"></div>
@@ -888,6 +890,16 @@ function renderTabs(){
     panel.id='panel-'+ct.id;panel.className='panel';panel.dataset.custom='1';
     wrapper.appendChild(panel);
   });
+  const skiBtn=document.querySelector('.tab[data-tab="ski"]');
+  if(skiBtn)skiBtn.style.display=state.skiVisible===false?'none':'';
+}
+
+function deleteSki(){
+  state.skiVisible=false;
+  saveState();renderTabs();switchTab('resumen');
+  showUndoToast('Ski & Equipo eliminado',()=>{
+    state.skiVisible=true;saveState();renderTabs();
+  },10000);
 }
 
 function renderCustomTab(tabId){
