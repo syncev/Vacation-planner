@@ -184,6 +184,7 @@ function migrateState(s){
   if(s.ski&&!s.ski.dias)s.ski.dias=[];
   if(s.actividades)s.actividades=s.actividades.map(a=>({fecha:'',fechaFin:'',...a}));
   if(!s.customTabs)s.customTabs=[];
+  else s.customTabs=s.customTabs.map(ct=>({fechas:[],...ct}));
   if(s.skiVisible===undefined)s.skiVisible=true;
   return s;
 }
@@ -922,6 +923,18 @@ function renderCustomTab(tabId){
       <div style="font-size:12px;color:var(--color-text-secondary)">Total seleccionado</div>
       <div style="font-size:20px;font-weight:600;margin-top:2px">$${fmt(total)}</div>
     </div>`:''}
+    ${(ct.fechas||[]).length>0?`<div class="card" style="margin-bottom:.75rem">
+      <div class="section-header" style="padding-bottom:.625rem;margin-bottom:.625rem;border-bottom:.5px solid var(--color-border-tertiary)">
+        <span style="font-size:12px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.04em">Fechas</span>
+        <button class="btn-icon" onclick="openCustomTabCalendar('${tabId}')"><i class="ti ti-calendar"></i></button>
+      </div>
+      ${ct.fechas.map(f=>`<div style="display:flex;align-items:center;gap:8px;padding:.2rem 0">
+        <i class="ti ti-calendar-event" style="font-size:13px;color:var(--color-text-tertiary);flex-shrink:0"></i>
+        <span style="font-size:13px;font-weight:500">${fmtDate(f.fecha)}</span>
+        ${f.nota?`<span style="font-size:12px;color:var(--color-text-secondary)">${f.nota}</span>`:''}
+      </div>`).join('')}
+    </div>`:''}
+    <button class="add-btn" style="margin-bottom:.5rem" onclick="openCustomTabCalendar('${tabId}')"><i class="ti ti-plus"></i> Agregar fecha</button>
     ${(ct.secciones||[]).map(s=>`<div class="card" style="margin-bottom:.75rem">
       <div class="section-header" style="padding-bottom:.75rem;margin-bottom:.75rem;border-bottom:.5px solid var(--color-border-tertiary)">
         <h4 style="font-size:14px;font-weight:500">${s.nombre}</h4>
@@ -952,6 +965,40 @@ function renderCustomTab(tabId){
       <button class="add-btn" onclick="formCustomItem('${tabId}','${s.id}',null)"><i class="ti ti-plus"></i> Agregar opción</button>
     </div>`).join('')}
     <button class="add-btn" onclick="formCustomSection('${tabId}',null)"><i class="ti ti-plus"></i> Agregar sub-sección</button>`;
+}
+
+function openCustomTabCalendar(tabId){
+  const ct=(state.customTabs||[]).find(t=>t.id===tabId);if(!ct)return;
+  if(!ct.fechas)ct.fechas=[];
+  _calSelected=new Set(ct.fechas.map(f=>f.fecha).filter(Boolean));
+  _calNotes={};
+  ct.fechas.forEach(f=>{if(f.fecha&&f.nota)_calNotes[f.fecha]=f.nota;});
+  const now=new Date();
+  _calStartYear=now.getFullYear();_calStartMonth=now.getMonth();
+  openModal(`<h3>Fechas — ${ct.nombre}</h3>
+    <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:.75rem">Tocá los días para seleccionarlos.</p>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem">
+      <button id="cal-prev" class="btn-icon" onclick="navCal(-1)" disabled><i class="ti ti-chevron-left"></i></button>
+      <span id="cal-title" style="font-size:12px;color:var(--color-text-secondary)">${calTitle()}</span>
+      <button class="btn-icon" onclick="navCal(1)"><i class="ti ti-chevron-right"></i></button>
+    </div>
+    <div id="cal-grids" style="display:flex;gap:1.5rem;flex-wrap:wrap">
+      ${renderCalMonth(_calStartYear,_calStartMonth)}${(()=>{const y2=_calStartMonth===11?_calStartYear+1:_calStartYear;const m2=_calStartMonth===11?0:_calStartMonth+1;return renderCalMonth(y2,m2);})()}
+    </div>
+    <div id="cal-count" style="font-size:12px;font-weight:500;color:#1D9E75;margin-top:.75rem">${_calSelected.size===0?'Ningún día seleccionado':_calSelected.size===1?'1 día seleccionado':_calSelected.size+' días seleccionados'}</div>
+    <div id="cal-selected-list"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveCustomTabCalendar('${tabId}')">Guardar</button>
+    </div>`);
+  if(_calSelected.size>0)updateCalSelectedList();
+}
+
+function saveCustomTabCalendar(tabId){
+  calSaveNotes();
+  const ct=(state.customTabs||[]).find(t=>t.id===tabId);if(!ct)return;
+  ct.fechas=Array.from(_calSelected).sort().map(fecha=>({fecha,nota:_calNotes[fecha]||''}));
+  saveState();closeModal();renderCustomTab(tabId);
 }
 
 function formCustomTab(tabId){
