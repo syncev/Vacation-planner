@@ -151,50 +151,10 @@ const DEFAULT = {
   tripDate: '',
   personas: [],
   vuelos: {},
-  hospedaje: [
-    {id:1,nombre:'Villa los Coihues',plataforma:'Airbnb',fechas:'14–18 ago',precioTotal:200000,checked:false,link:'https://www.airbnb.com/rooms/28982267?check_in=2026-08-14&check_out=2026-08-18&guests=1&adults=2',notas:''},
-    {id:2,nombre:'Villa los Coihues',plataforma:'Booking',fechas:'14–18 ago',precioTotal:200000,checked:false,link:'https://www.booking.com/Share-M77bux',notas:''},
-    {id:3,nombre:'Bariloche Sur',plataforma:'Airbnb',fechas:'14–18 ago',precioTotal:200000,checked:false,link:'https://www.airbnb.com/rooms/1283376091846965155?check_in=2026-08-14&check_out=2026-08-18&guests=1&adults=2',notas:''},
-    {id:4,nombre:'Airbnb opción 3',plataforma:'Airbnb',fechas:'14–18 ago',precioTotal:200000,checked:false,link:'https://www.airbnb.com/rooms/1633645829947158429?check_in=2026-08-14&check_out=2026-08-18&guests=1&adults=2',notas:''},
-    {id:5,nombre:'Airbnb opción 4 (centro)',plataforma:'Airbnb',fechas:'14–18 ago',precioTotal:200000,checked:false,link:'https://www.airbnb.com/rooms/1127370243374108079?check_in=2026-08-14&check_out=2026-08-18&guests=1&adults=2',notas:''},
-    {id:6,nombre:'Hotel Booking 1',plataforma:'Booking',fechas:'14–18 ago',precioTotal:0,checked:false,link:'https://www.booking.com/Share-GIE97nr',notas:''},
-    {id:7,nombre:'Hotel Booking 2',plataforma:'Booking',fechas:'14–18 ago',precioTotal:0,checked:false,link:'https://www.booking.com/Share-xs9Mcxv',notas:''},
-    {id:8,nombre:'Hospedaje Penthouse 1004 — hab. privada',plataforma:'Hostelworld',fechas:'6–10 ago (ref)',precioTotal:411600,checked:false,link:'https://www.spanish.hostelworld.com/pwa/hosteldetails.php/Hospedaje-Penthouse-1004/Bariloche/59459',notas:'Habitación privada matrimonial'},
-    {id:9,nombre:'Moving Hostel — 2 camas privadas',plataforma:'Hostelworld',fechas:'6–10 ago (ref)',precioTotal:387200,checked:false,link:'https://www.spanish.hostelworld.com/pwa/hosteldetails.php/Moving-Hostel-Travel-Bar/Bariloche/78949',notas:'Básico, baño compartido'},
-    {id:10,nombre:'Hostel Achalay — 2 camas privadas',plataforma:'Hostelworld',fechas:'6–10 ago (ref)',precioTotal:336000,checked:false,link:'https://www.spanish.hostelworld.com/pwa/hosteldetails.php/Hostel-Achalay/Bariloche/8690',notas:'Baño compartido'},
-    {id:11,nombre:'Villa Catedral — Airbnb AR',plataforma:'Airbnb AR',fechas:'ref jul-ago',precioTotal:400,checked:false,link:'https://www.airbnb.com.ar/rooms/17886055',notas:'Precio en USD'},
-  ],
-  ski: {
-    dias: [],
-    pase: [{id:1,nombre:'Pase Cerro Catedral',descripcion:'1 día, adulto',precio:160000,checked:false,link:'https://catedralaltapatagonia.com',notas:''}],
-    equipo: [
-      {id:1,nombre:'Epic Bariloche',descripcion:'Standard diario — esquís + botas + bastones',precio:52000,checked:false,link:'https://www.epicbariloche.com.ar/productos/alquiler-standard-diario1/',notas:''},
-      {id:2,nombre:'Nieve Austral',descripcion:'Standard diario',precio:53500,checked:false,link:'https://nieveaustral.com.ar/rental/',notas:''},
-      {id:3,nombre:'Travesía Catedral',descripcion:'Standard diario',precio:55000,checked:false,link:'https://travesiacatedral.com.ar/quote',notas:''},
-      {id:4,nombre:'Despegar (actividad)',descripcion:'Equipo ski/snowboard',precio:0,checked:false,link:'https://www.despegar.com.ar/actividades/d-PAM_BRC_33750/',notas:'Precio a consultar'},
-    ],
-    ropa: [
-      {id:1,nombre:'Despegar (actividad)',descripcion:'Conjunto completo + casco + antiparras',precio:65000,checked:false,link:'https://www.despegar.com.ar/actividades/d-PAM_BRC_62473/',notas:''},
-      {id:2,nombre:'Epic Bariloche',descripcion:'Buzos / ropa nieve hombre',precio:0,checked:false,link:'https://www.epicbariloche.com.ar/invierno/hombre/buzos1/',notas:'A consultar'},
-      {id:3,nombre:'Bariloche Travel',descripcion:'Ropa de nieve completa',precio:0,checked:false,link:'https://www.bariloche.travel/producto/alquiler-ropa-de-nieve/',notas:'A consultar'},
-      {id:4,nombre:'AlquilerRopaDeSkiAR',descripcion:'Ropa ski',precio:0,checked:false,link:'https://alquilerderopadeski.com.ar/producto/alquiler/',notas:'A consultar'},
-    ]
-  },
-  actividades: [
-    {id:1,nombre:'Cerro Catedral (2do día ski)',tipo:'Ski',precio:160000,duracion:'Día completo',fecha:'',fechaFin:'',checked:false,link:'',notas:'Mismo pase que día 1'},
-    {id:2,nombre:'Piedras Blancas — trineos / snow tubing',tipo:'Excursión',precio:0,duracion:'Medio día',fecha:'',fechaFin:'',checked:false,link:'http://www.piedrasblancasbariloche.com/actividades.html',notas:''},
-    {id:3,nombre:'Cerro Otto (teleférico)',tipo:'Excursión',precio:0,duracion:'Medio día',fecha:'',fechaFin:'',checked:false,link:'https://www.telefericobariloche.com.ar/en',notas:''},
-    {id:4,nombre:'Villa Llao Llao + Cerro Campanario',tipo:'Circuito',precio:0,duracion:'Día completo',fecha:'',fechaFin:'',checked:false,link:'https://cerrocampanario.com.ar/',notas:''},
-    {id:5,nombre:'Circuito Chico (lunes mañana)',tipo:'Circuito',precio:0,duracion:'Mañana',fecha:'',fechaFin:'',checked:false,link:'',notas:''},
-  ],
-  traslados: [
-    {id:1,nombre:'Aeropuerto BRC → Hospedaje',tipo:'Remis / Transfer',precio:0,checked:false,notas:'A cotizar en llegada'},
-    {id:2,nombre:'Hospedaje → Cerro Catedral',tipo:'Bus / Remis',precio:0,checked:false,notas:''},
-    {id:3,nombre:'Cerro Catedral → Hospedaje',tipo:'Bus / Remis',precio:0,checked:false,notas:''},
-    {id:4,nombre:'Excursión día 3',tipo:'Tour / Auto',precio:0,checked:false,notas:''},
-    {id:5,nombre:'Recorrido circuito día 4',tipo:'Tour / Auto',precio:0,checked:false,notas:''},
-    {id:6,nombre:'Hospedaje → Aeropuerto BRC',tipo:'Remis / Transfer',precio:0,checked:false,notas:''},
-  ]
+  hospedaje: [],
+  ski: { dias: [], pase: [], equipo: [], ropa: [] },
+  actividades: [],
+  traslados: []
 };
 
 function migrateState(s){
