@@ -41,7 +41,7 @@ body::-webkit-scrollbar{display:none}
 .app-wrapper{max-width:720px;margin:0 auto;padding:1.5rem 1rem}
 .app-title{font-size:22px;font-weight:500;margin-bottom:1.5rem}
 .app-title span{font-size:14px;color:var(--color-text-secondary);font-weight:400;margin-left:8px}
-.tabs{display:flex;gap:4px;border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:1.5rem;overflow-x:auto;padding-bottom:0;scrollbar-width:none;align-items:flex-end;width:fit-content;max-width:100%}
+.tabs{display:flex;gap:4px;border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:1.5rem;overflow-x:auto;padding-bottom:0;scrollbar-width:none;align-items:flex-end}
 .tabs::-webkit-scrollbar{display:none}
 .tab-add{padding:6px 10px;border:none;background:none;cursor:pointer;color:var(--color-text-tertiary);font-size:16px;line-height:1;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:6px 6px 0 0;font-family:var(--font-sans)}
 .tab-add:hover{color:var(--color-text-primary);background:var(--color-background-secondary)}
@@ -138,7 +138,7 @@ h3{font-size:15px;font-weight:500;margin-bottom:.75rem}
   <div id="panel-hospedaje" class="panel"></div>
   <div id="panel-traslados" class="panel"></div>
   <div id="panel-actividades" class="panel"></div>
-  <div id="panel-traslados" class="panel"></div>
+  <div id="panel-ski" class="panel"></div>
 </div>
 
 <div id="admin-overlay">
@@ -929,6 +929,7 @@ function renderTabs(){
     $('tabs').insertBefore(btn,addBtn);
     const panel=document.createElement('div');
     panel.id='panel-'+ct.id;panel.className='panel';panel.dataset.custom='1';
+    if(activeId===ct.id)panel.classList.add('active');
     wrapper.appendChild(panel);
   });
   const skiBtn=document.querySelector('.tab[data-tab="ski"]');
