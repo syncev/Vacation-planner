@@ -129,6 +129,8 @@ h3{font-size:15px;font-weight:500;margin-bottom:.75rem}
   <div class="modal" id="modal-box"></div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const fmt = n => n ? Math.round(n).toLocaleString('es-AR') : '—';
@@ -191,7 +193,12 @@ const DEFAULT = {
 
 let state;
 function loadState(){try{const s=localStorage.getItem('brc2026');if(s)return JSON.parse(s);}catch(e){}return JSON.parse(JSON.stringify(DEFAULT));}
-function saveState(){try{localStorage.setItem('brc2026',JSON.stringify(state));}catch(e){}}
+let _saveTimer=null;
+function saveState(){
+  try{localStorage.setItem('brc2026',JSON.stringify(state));}catch(e){}
+  clearTimeout(_saveTimer);
+  _saveTimer=setTimeout(()=>tripDoc.set(state).catch(console.error),600);
+}
 state = loadState();
 
 function getSelected(arr){return arr.find(i=>i.checked)||null}
@@ -517,7 +524,23 @@ function saveTraslado(id){
   saveState();closeModal();renderTraslados();renderResumen();
 }
 
+const firebaseConfig={apiKey:"AIzaSyDtKC_pxrtqNNkZ4w4OoG0YVBQIthkB4vA",authDomain:"vacation-planner-abdea.firebaseapp.com",projectId:"vacation-planner-abdea",storageBucket:"vacation-planner-abdea.firebasestorage.app",messagingSenderId:"166005708712",appId:"1:166005708712:web:946ee9b8a23e195e266f9d"};
+firebase.initializeApp(firebaseConfig);
+const db=firebase.firestore();
+const tripDoc=db.collection('trips').doc('bariloche-2026');
+
+state=loadState();
 renderResumen();
+
+tripDoc.onSnapshot(snap=>{
+  if(snap.exists){
+    state=snap.data();
+    try{localStorage.setItem('brc2026',JSON.stringify(state));}catch(e){}
+    renderPanel(document.querySelector('.tab.active')?.dataset.tab||'resumen');
+  } else {
+    tripDoc.set(state);
+  }
+},err=>console.error('Firestore:',err));
 </script>
 </body>
 </html>
