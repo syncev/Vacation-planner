@@ -205,10 +205,11 @@ function migrateState(s){
 }
 
 let state;
-function loadState(){try{const s=localStorage.getItem('brc2026');if(s)return migrateState(JSON.parse(s));}catch(e){}return JSON.parse(JSON.stringify(DEFAULT));}
+function lsKey(){return'trip_'+TRIP_ID;}
+function loadState(){try{const s=localStorage.getItem(lsKey());if(s)return migrateState(JSON.parse(s));}catch(e){}return JSON.parse(JSON.stringify(DEFAULT));}
 let _saveTimer=null;
 function saveState(){
-  try{localStorage.setItem('brc2026',JSON.stringify(state));}catch(e){}
+  try{localStorage.setItem(lsKey(),JSON.stringify(state));}catch(e){}
   clearTimeout(_saveTimer);
   _saveTimer=setTimeout(()=>tripDoc.set(state).catch(console.error),600);
 }
@@ -866,11 +867,12 @@ if(state.personas.length===0)formPersona(null,true);
 tripDoc.onSnapshot(snap=>{
   if(snap.exists){
     state=migrateState(snap.data());
-    try{localStorage.setItem('brc2026',JSON.stringify(state));}catch(e){}
+    try{localStorage.setItem(lsKey(),JSON.stringify(state));}catch(e){}
     if(_modalLocked&&state.personas.length>0){_modalLocked=false;$('modal-overlay').style.display='none';}
     renderTitle();
     renderPanel(document.querySelector('.tab.active')?.dataset.tab||'resumen');
   } else {
+    state=JSON.parse(JSON.stringify(DEFAULT));
     tripDoc.set(state);
   }
 },err=>console.error('Firestore:',err));
