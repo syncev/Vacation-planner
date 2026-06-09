@@ -108,7 +108,7 @@ h3{font-size:15px;font-weight:500;margin-bottom:.75rem}
 </head>
 <body>
 <div class="app-wrapper">
-  <div class="app-title">Bariloche 2026 <span>14–18 agosto</span></div>
+  <div id="app-title" class="app-title"></div>
   <div class="tabs" id="tabs">
     <button class="tab active" data-tab="resumen"><i class="ti ti-layout-dashboard"></i> Resumen</button>
     <button class="tab" data-tab="vuelos"><i class="ti ti-plane"></i> Vuelos</button>
@@ -136,16 +136,10 @@ const $ = id => document.getElementById(id);
 const fmt = n => n ? Math.round(n).toLocaleString('es-AR') : '—';
 
 const DEFAULT = {
-  vuelos: {
-    santi: [
-      {id:1,nombre:'Opción 1 — MDZ→BRC→MDZ',aerolinea:'',fechaIda:'13-ago',fechaVuelta:'18-ago',precio:350000,checked:false,link:''},
-      {id:2,nombre:'Opción 2',aerolinea:'',fechaIda:'',fechaVuelta:'',precio:0,checked:false,link:''},
-    ],
-    amigo: [
-      {id:1,nombre:'Opción 1 — BUE→BRC→BUE',aerolinea:'',fechaIda:'14-ago',fechaVuelta:'18-ago',precio:260000,checked:false,link:''},
-      {id:2,nombre:'Opción 2',aerolinea:'',fechaIda:'',fechaVuelta:'',precio:0,checked:false,link:''},
-    ]
-  },
+  tripName: 'Mi Viaje',
+  tripDate: '',
+  personas: [],
+  vuelos: {},
   hospedaje: [
     {id:1,nombre:'Villa los Coihues',plataforma:'Airbnb',fechas:'14–18 ago',precioTotal:200000,checked:false,link:'https://www.airbnb.com/rooms/28982267?check_in=2026-08-14&check_out=2026-08-18&guests=1&adults=2',notas:''},
     {id:2,nombre:'Villa los Coihues',plataforma:'Booking',fechas:'14–18 ago',precioTotal:200000,checked:false,link:'https://www.booking.com/Share-M77bux',notas:''},
@@ -191,33 +185,75 @@ const DEFAULT = {
   ]
 };
 
+function migrateState(s){
+  if(s.vuelos&&s.vuelos.santi!==undefined){
+    s={...s,personas:[],vuelos:{}};
+  }
+  if(!s.personas)s.personas=[];
+  if(!s.vuelos||Array.isArray(s.vuelos))s.vuelos={};
+  if(!s.tripName)s.tripName='Mi Viaje';
+  if(s.tripDate===undefined)s.tripDate='';
+  return s;
+}
+
 let state;
-function loadState(){try{const s=localStorage.getItem('brc2026');if(s)return JSON.parse(s);}catch(e){}return JSON.parse(JSON.stringify(DEFAULT));}
+function loadState(){try{const s=localStorage.getItem('brc2026');if(s)return migrateState(JSON.parse(s));}catch(e){}return JSON.parse(JSON.stringify(DEFAULT));}
 let _saveTimer=null;
 function saveState(){
   try{localStorage.setItem('brc2026',JSON.stringify(state));}catch(e){}
   clearTimeout(_saveTimer);
   _saveTimer=setTimeout(()=>tripDoc.set(state).catch(console.error),600);
 }
-state = loadState();
 
-function getSelected(arr){return arr.find(i=>i.checked)||null}
+function getSelected(arr){return arr?arr.find(i=>i.checked)||null:null;}
+function nextId(arr){return Math.max(0,...arr.map(i=>i.id))+1;}
+
+let _modalLocked=false;
+function openModal(html){$('modal-box').innerHTML=html;$('modal-overlay').style.display='flex';}
+function closeModal(){if(_modalLocked)return;$('modal-overlay').style.display='none';}
+
+function renderTitle(){
+  const name=state.tripName||'Mi Viaje';
+  const date=state.tripDate||'';
+  $('app-title').innerHTML=`${name}${date?` <span>${date}</span>`:''} <button class="btn-icon" onclick="editTitle()" style="font-size:14px;vertical-align:middle;opacity:.5"><i class="ti ti-edit"></i></button>`;
+  document.title=name+' — Planificador';
+}
+function editTitle(){
+  openModal(`<h3>Editar viaje</h3>
+    <div class="form-group"><label>Nombre del viaje</label><input id="ttn" value="${state.tripName||''}"></div>
+    <div class="form-group"><label>Fechas</label><input id="ttd" value="${state.tripDate||''}" placeholder="ej: 14–18 agosto"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveTitle()">Guardar</button>
+    </div>`);
+  setTimeout(()=>$('ttn')&&$('ttn').focus(),50);
+}
+function saveTitle(){
+  state.tripName=$('ttn').value.trim()||'Mi Viaje';
+  state.tripDate=$('ttd').value.trim();
+  saveState();closeModal();renderTitle();
+}
+function copyTripUrl(){
+  navigator.clipboard.writeText(location.href).then(()=>{
+    const btn=$('copy-url-btn');
+    if(btn){btn.textContent='¡Copiado!';setTimeout(()=>{btn.textContent='Copiar';},2000);}
+  });
+}
 
 function calcResumen(){
-  const svuelo=getSelected(state.vuelos.santi);
-  const avuelo=getSelected(state.vuelos.amigo);
+  const n=Math.max(state.personas.length,1);
   const hosp=getSelected(state.hospedaje);
+  const hospPP=hosp?Math.round(hosp.precioTotal/n):0;
   const pase=getSelected(state.ski.pase);
   const equipo=getSelected(state.ski.equipo);
   const ropa=getSelected(state.ski.ropa);
+  const skiPP=(pase?.precio||0)+(equipo?.precio||0)+(ropa?.precio||0);
   const act=getSelected(state.actividades);
-  const hospPP=hosp?Math.round(hosp.precioTotal/2):0;
-  const paseP=pase?pase.precio:0;
-  const equipoP=equipo?equipo.precio:0;
-  const ropaP=ropa?ropa.precio:0;
-  return{svuelo,avuelo,hosp,pase,equipo,ropa,act,hospPP,paseP,equipoP,ropaP,
-    totalSanti:(svuelo?.precio||0)+hospPP+paseP+equipoP+ropaP,
-    totalAmigo:(avuelo?.precio||0)+hospPP+paseP+equipoP+ropaP};
+  const personas=state.personas.map(p=>{
+    const vuelo=getSelected(state.vuelos[String(p.id)]||[]);
+    return{...p,vuelo,total:(vuelo?.precio||0)+hospPP+skiPP};
+  });
+  return{personas,hosp,hospPP,pase,equipo,ropa,skiPP,act,n};
 }
 
 function platformBadge(p){
@@ -225,10 +261,62 @@ function platformBadge(p){
   return m[p]||'badge-gray';
 }
 
+function renderPersonas(){
+  return`<div style="margin-bottom:1.25rem">
+    <div class="section-header"><h3>Viajeros</h3><button class="btn-icon" onclick="formPersona(null,false)" title="Agregar viajero" style="font-size:18px"><i class="ti ti-user-plus"></i></button></div>
+    <div style="display:flex;flex-wrap:wrap;gap:.5rem">
+      ${state.personas.map(p=>`
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary)">
+          <i class="ti ti-user" style="font-size:14px;color:var(--color-text-secondary)"></i>
+          <span style="font-size:13px;font-weight:500">${p.nombre}</span>
+          ${p.origen?`<span style="font-size:11px;color:var(--color-text-secondary)">${p.origen}</span>`:''}
+          <button class="btn-icon" onclick="editPersona(${p.id})" style="font-size:14px;padding:2px"><i class="ti ti-edit"></i></button>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function formPersona(p,firstRun){
+  _modalLocked=!!firstRun;
+  const isEdit=!!p;
+  p=p||{nombre:'',origen:''};
+  openModal(`<h3>${firstRun?'Bienvenido — ¿cómo te llamás?':isEdit?'Editar viajero':'Nuevo viajero'}</h3>
+    <div class="form-group"><label>Nombre</label><input id="pn" value="${p.nombre}" placeholder="ej: Santi"></div>
+    <div class="form-group"><label>Origen / ciudad</label><input id="po" value="${p.origen}" placeholder="ej: Mendoza — MDZ"></div>
+    <div class="modal-actions">
+      ${isEdit&&!firstRun&&state.personas.length>1?`<button class="btn-danger" onclick="deletePersona(${p.id})">Eliminar</button>`:''}
+      ${!firstRun?`<button class="btn-secondary" onclick="closeModal()">Cancelar</button>`:''}
+      <button class="btn-primary" onclick="savePersona(${isEdit?p.id:0})">${firstRun?'Empezar':'Guardar'}</button>
+    </div>`);
+  setTimeout(()=>$('pn')&&$('pn').focus(),50);
+}
+function editPersona(id){formPersona(state.personas.find(p=>p.id===id),false);}
+function savePersona(id){
+  const nombre=$('pn').value.trim();
+  if(!nombre)return;
+  const origen=$('po').value.trim();
+  if(id){
+    state.personas=state.personas.map(p=>p.id===id?{...p,nombre,origen}:p);
+  } else {
+    const newId=Math.max(0,...state.personas.map(p=>p.id))+1;
+    state.personas.push({id:newId,nombre,origen});
+    if(!state.vuelos[String(newId)])state.vuelos[String(newId)]=[];
+  }
+  _modalLocked=false;
+  saveState();closeModal();renderResumen();
+}
+function deletePersona(id){
+  if(state.personas.length<=1)return;
+  state.personas=state.personas.filter(p=>p.id!==id);
+  delete state.vuelos[String(id)];
+  saveState();closeModal();renderResumen();
+}
+
 function renderResumen(){
   const r=calcResumen();
-  const confirmed=[r.svuelo||r.avuelo,r.hosp,r.pase,r.equipo,r.ropa].filter(Boolean).length;
-  const pct=Math.round(confirmed/5*100);
+  const confirmed=[r.hosp,r.pase,r.equipo,r.ropa].filter(Boolean).length+r.personas.filter(p=>p.vuelo).length;
+  const total=4+r.personas.length;
+  const pct=total>0?Math.round(confirmed/total*100):0;
   const itinerary=[
     {fecha:'Jue 13 ago',act:'Llegada a Bariloche',note:'Confirmar hora de vuelo'},
     {fecha:'Vie 14 ago',act:'Check-in hospedaje · explorar el centro',note:''},
@@ -239,40 +327,40 @@ function renderResumen(){
   ];
   $('panel-resumen').innerHTML=`
 <h2>Resumen del viaje</h2>
+<div style="display:flex;align-items:center;gap:8px;padding:.625rem .875rem;background:var(--color-background-secondary);border-radius:var(--border-radius-md);margin-bottom:1.25rem;border:.5px solid var(--color-border-tertiary)">
+  <i class="ti ti-link" style="font-size:14px;color:var(--color-text-secondary);flex-shrink:0"></i>
+  <span style="font-size:11px;color:var(--color-text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${location.href}</span>
+  <button id="copy-url-btn" onclick="copyTripUrl()" class="btn-secondary" style="font-size:11px;padding:4px 10px;white-space:nowrap;flex-shrink:0">Copiar</button>
+</div>
+${renderPersonas()}
 <div style="margin-bottom:1.25rem">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-    <span style="font-size:12px;color:var(--color-text-secondary)">Opciones confirmadas: ${confirmed}/5</span>
+    <span style="font-size:12px;color:var(--color-text-secondary)">Opciones confirmadas: ${confirmed}/${total}</span>
     <span style="font-size:12px;font-weight:500">${pct}%</span>
   </div>
   <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
 </div>
 <div class="summary-grid">
-  <div class="metric-card">
-    <div class="metric-label">Total Santi (MDZ)</div>
-    <div class="metric-value">$${fmt(r.totalSanti)}</div>
-    <div class="metric-sub">${r.svuelo?'Vuelo: $'+fmt(r.svuelo.precio):'Vuelo sin confirmar'}</div>
-  </div>
-  <div class="metric-card">
-    <div class="metric-label">Total Amigo (BUE)</div>
-    <div class="metric-value">$${fmt(r.totalAmigo)}</div>
-    <div class="metric-sub">${r.avuelo?'Vuelo: $'+fmt(r.avuelo.precio):'Vuelo sin confirmar'}</div>
-  </div>
+  ${r.personas.map(p=>`<div class="metric-card">
+    <div class="metric-label">Total ${p.nombre}</div>
+    <div class="metric-value">$${fmt(p.total)}</div>
+    <div class="metric-sub">${p.vuelo?'Vuelo: $'+fmt(p.vuelo.precio):'Vuelo sin confirmar'}${p.origen?' · '+p.origen:''}</div>
+  </div>`).join('')}
   <div class="metric-card">
     <div class="metric-label">Hospedaje por persona</div>
     <div class="metric-value">${r.hosp?'$'+fmt(r.hospPP):'—'}</div>
-    <div class="metric-sub">${r.hosp?r.hosp.nombre:'Sin seleccionar'}</div>
+    <div class="metric-sub">${r.hosp?r.hosp.nombre+(r.n>1?' · entre '+r.n:''):'Sin seleccionar'}</div>
   </div>
   <div class="metric-card">
     <div class="metric-label">Día de ski por persona</div>
-    <div class="metric-value">$${fmt(r.paseP+r.equipoP+r.ropaP)}</div>
+    <div class="metric-value">$${fmt(r.skiPP)}</div>
     <div class="metric-sub">Pase + equipo + ropa</div>
   </div>
 </div>
 <div class="divider"></div>
 <h3>Opciones seleccionadas</h3>
 <div style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.25rem">
-${lineItem('Vuelo Santi',r.svuelo?r.svuelo.nombre:'Sin seleccionar',r.svuelo?r.svuelo.precio:null,'vuelos')}
-${lineItem('Vuelo Amigo',r.avuelo?r.avuelo.nombre:'Sin seleccionar',r.avuelo?r.avuelo.precio:null,'vuelos')}
+${r.personas.map(p=>lineItem('Vuelo '+p.nombre,p.vuelo?p.vuelo.nombre:'Sin seleccionar',p.vuelo?p.vuelo.precio:null,'vuelos')).join('')}
 ${lineItem('Hospedaje (p/p)',r.hosp?r.hosp.nombre:'Sin seleccionar',r.hosp?r.hospPP:null,'hospedaje')}
 ${lineItem('Pase ski',r.pase?r.pase.nombre:'Sin seleccionar',r.pase?r.pase.precio:null,'ski')}
 ${lineItem('Equipo ski',r.equipo?r.equipo.nombre:'Sin seleccionar',r.equipo?r.equipo.precio:null,'ski')}
@@ -301,23 +389,25 @@ function switchTab(id){
 }
 
 function renderVuelos(){
-  const html=p=>{
-    const list=state.vuelos[p];
-    const quien=p==='santi'?'Santi (desde Mendoza — MDZ)':'Amigo (desde Buenos Aires — BUE)';
-    return`<div style="margin-bottom:1.5rem"><div class="section-header"><h3>${quien}</h3></div>
-    ${list.map(v=>`<div class="card${v.checked?' done':''}"><div class="card-row">
-      <div class="checkbox${v.checked?' checked':''}" onclick="toggleVuelo('${p}',${v.id})"></div>
-      <div class="card-body"><div class="item-name">${v.nombre}${v.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
-      <div class="item-meta">${v.aerolinea?`<span class="badge badge-gray">${v.aerolinea}</span>`:''}
-      ${v.fechaIda?`<span>Ida: ${v.fechaIda}</span>`:''}${v.fechaVuelta?`<span>Vuelta: ${v.fechaVuelta}</span>`:''}
-      ${v.precio?`<span class="price-tag">$${fmt(v.precio)}</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">precio a cotizar</span>'}
-      ${v.link?`<a href="${v.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}</div></div>
-      <div class="card-actions"><button class="btn-icon" onclick="editVuelo('${p}',${v.id})"><i class="ti ti-edit"></i></button>
-      <button class="btn-icon" onclick="deleteVuelo('${p}',${v.id})"><i class="ti ti-trash"></i></button></div>
-    </div></div>`).join('')}
-    <button class="add-btn" onclick="addVuelo('${p}')"><i class="ti ti-plus"></i> Agregar opción de vuelo</button></div>`;
-  };
-  $('panel-vuelos').innerHTML=`<h2>Vuelos</h2>${html('santi')}${html('amigo')}`;
+  const sections=state.personas.map(p=>{
+    const list=state.vuelos[String(p.id)]||[];
+    return`<div style="margin-bottom:1.5rem">
+      <div class="section-header"><h3>${p.nombre}${p.origen?` <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">desde ${p.origen}</span>`:''}</h3></div>
+      ${list.length===0?'<p style="font-size:12px;color:var(--color-text-tertiary);padding:.5rem 0">Sin opciones de vuelo aún.</p>':''}
+      ${list.map(v=>`<div class="card${v.checked?' done':''}"><div class="card-row">
+        <div class="checkbox${v.checked?' checked':''}" onclick="toggleVuelo(${p.id},${v.id})"></div>
+        <div class="card-body"><div class="item-name">${v.nombre}${v.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
+        <div class="item-meta">${v.aerolinea?`<span class="badge badge-gray">${v.aerolinea}</span>`:''}
+        ${v.fechaIda?`<span>Ida: ${v.fechaIda}</span>`:''}${v.fechaVuelta?`<span>Vuelta: ${v.fechaVuelta}</span>`:''}
+        ${v.precio?`<span class="price-tag">$${fmt(v.precio)}</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">precio a cotizar</span>'}
+        ${v.link?`<a href="${v.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}</div></div>
+        <div class="card-actions"><button class="btn-icon" onclick="editVuelo(${p.id},${v.id})"><i class="ti ti-edit"></i></button>
+        <button class="btn-icon" onclick="deleteVuelo(${p.id},${v.id})"><i class="ti ti-trash"></i></button></div>
+      </div></div>`).join('')}
+      <button class="add-btn" onclick="addVuelo(${p.id})"><i class="ti ti-plus"></i> Agregar opción de vuelo</button>
+    </div>`;
+  });
+  $('panel-vuelos').innerHTML=`<h2>Vuelos</h2>${state.personas.length===0?'<p style="color:var(--color-text-secondary)">Agregá viajeros desde el Resumen para gestionar vuelos.</p>':sections.join('')}`;
 }
 
 function renderHospedaje(){
@@ -327,7 +417,7 @@ function renderHospedaje(){
     <div class="card-body"><div class="item-name">${h.nombre}${h.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
     <div class="item-meta"><span class="badge ${platformBadge(h.plataforma)}">${h.plataforma}</span>
     ${h.fechas?`<span>${h.fechas}</span>`:''}
-    ${h.precioTotal>1000?`<span class="price-tag">$${fmt(h.precioTotal)} total · $${fmt(h.precioTotal/2)} p/p</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">precio a consultar</span>'}
+    ${h.precioTotal>1000?`<span class="price-tag">$${fmt(h.precioTotal)} total · $${fmt(Math.round(h.precioTotal/Math.max(state.personas.length,1)))} p/p</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">precio a consultar</span>'}
     ${h.link?`<a href="${h.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
     ${h.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${h.notas}</span>`:''}</div></div>
     <div class="card-actions"><button class="btn-icon" onclick="editHosp(${h.id})"><i class="ti ti-edit"></i></button>
@@ -407,36 +497,44 @@ function renderPanel(id){
 
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)));
 
-function toggleVuelo(persona,id){state.vuelos[persona]=state.vuelos[persona].map(v=>({...v,checked:v.id===id?!v.checked:false}));saveState();renderVuelos();renderResumen();}
+function toggleVuelo(personaId,id){
+  const k=String(personaId);
+  state.vuelos[k]=(state.vuelos[k]||[]).map(v=>({...v,checked:v.id===id?!v.checked:false}));
+  saveState();renderVuelos();renderResumen();
+}
 function toggleItem(col,id){state[col]=state[col].map(i=>({...i,checked:i.id===id?!i.checked:false}));saveState();renderPanel(col);renderResumen();}
 function toggleSki(key,id){state.ski[key]=state.ski[key].map(i=>({...i,checked:i.id===id?!i.checked:false}));saveState();renderSki();renderResumen();}
 
-function nextId(arr){return Math.max(0,...arr.map(i=>i.id))+1;}
-function openModal(html){$('modal-box').innerHTML=html;$('modal-overlay').style.display='flex';}
-function closeModal(){$('modal-overlay').style.display='none';}
 $('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay'))closeModal();});
 
-function formVuelo(p,v){
-  const e=!!v;v=v||{nombre:'',aerolinea:'',fechaIda:'',fechaVuelta:'',precio:'',link:''};
-  openModal(`<h3>${e?'Editar vuelo':'Nuevo vuelo'} — ${p==='santi'?'Santi (MDZ)':'Amigo (BUE)'}</h3>
+function formVuelo(personaId,v){
+  const p=state.personas.find(p=>p.id===personaId);
+  const isEdit=!!v;v=v||{nombre:'',aerolinea:'',fechaIda:'',fechaVuelta:'',precio:'',link:''};
+  openModal(`<h3>${isEdit?'Editar vuelo':'Nuevo vuelo'} — ${p?p.nombre:''}</h3>
     <div class="form-group"><label>Nombre</label><input id="fn" value="${v.nombre}"></div>
     <div class="form-group"><label>Aerolínea</label><input id="fa" value="${v.aerolinea}"></div>
     <div class="form-row"><div class="form-group"><label>Fecha ida</label><input id="fi" value="${v.fechaIda}" placeholder="ej: 13-ago"></div>
     <div class="form-group"><label>Fecha vuelta</label><input id="fv" value="${v.fechaVuelta}" placeholder="ej: 18-ago"></div></div>
     <div class="form-group"><label>Precio (ARS)</label><input id="fp" type="number" value="${v.precio}"></div>
     <div class="form-group"><label>Link</label><input id="fl" value="${v.link}" placeholder="https://..."></div>
-    <div class="modal-actions">${e?`<button class="btn-danger" onclick="deleteVuelo('${p}',${v.id});closeModal()">Eliminar</button>`:''}
+    <div class="modal-actions">${isEdit?`<button class="btn-danger" onclick="deleteVuelo(${personaId},${v.id});closeModal()">Eliminar</button>`:''}
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
-    <button class="btn-primary" onclick="saveVuelo('${p}',${e?v.id:0})">Guardar</button></div>`);
+    <button class="btn-primary" onclick="saveVuelo(${personaId},${isEdit?v.id:0})">Guardar</button></div>`);
 }
-function addVuelo(p){formVuelo(p,null);}
-function editVuelo(p,id){formVuelo(p,state.vuelos[p].find(v=>v.id===id));}
-function saveVuelo(p,id){
+function addVuelo(personaId){formVuelo(personaId,null);}
+function editVuelo(personaId,id){formVuelo(personaId,(state.vuelos[String(personaId)]||[]).find(v=>v.id===id));}
+function saveVuelo(personaId,id){
+  const k=String(personaId);
+  if(!state.vuelos[k])state.vuelos[k]=[];
   const n={nombre:$('fn').value,aerolinea:$('fa').value,fechaIda:$('fi').value,fechaVuelta:$('fv').value,precio:parseFloat($('fp').value)||0,link:$('fl').value,checked:false};
-  if(id){state.vuelos[p]=state.vuelos[p].map(v=>v.id===id?{...v,...n,id}:v);}else{state.vuelos[p].push({...n,id:nextId(state.vuelos[p])});}
+  if(id){state.vuelos[k]=state.vuelos[k].map(v=>v.id===id?{...v,...n,id}:v);}else{state.vuelos[k].push({...n,id:nextId(state.vuelos[k])});}
   saveState();closeModal();renderVuelos();renderResumen();
 }
-function deleteVuelo(p,id){state.vuelos[p]=state.vuelos[p].filter(v=>v.id!==id);saveState();renderVuelos();renderResumen();}
+function deleteVuelo(personaId,id){
+  const k=String(personaId);
+  state.vuelos[k]=(state.vuelos[k]||[]).filter(v=>v.id!==id);
+  saveState();renderVuelos();renderResumen();
+}
 
 function formHosp(h){
   const e=!!h;h=h||{nombre:'',plataforma:'Airbnb',fechas:'14–18 ago',precioTotal:'',link:'',notas:''};
@@ -527,15 +625,29 @@ function saveTraslado(id){
 const firebaseConfig={apiKey:"AIzaSyDtKC_pxrtqNNkZ4w4OoG0YVBQIthkB4vA",authDomain:"vacation-planner-abdea.firebaseapp.com",projectId:"vacation-planner-abdea",storageBucket:"vacation-planner-abdea.firebasestorage.app",messagingSenderId:"166005708712",appId:"1:166005708712:web:946ee9b8a23e195e266f9d"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
-const tripDoc=db.collection('trips').doc('bariloche-2026');
+
+function getTripId(){
+  const hash=location.hash.slice(1);
+  if(hash)return hash;
+  const id=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():
+    'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&0x3|0x8)).toString(16);});
+  history.replaceState(null,'',location.pathname+location.search+'#'+id);
+  return id;
+}
+const TRIP_ID=getTripId();
+const tripDoc=db.collection('trips').doc(TRIP_ID);
 
 state=loadState();
+renderTitle();
 renderResumen();
+if(state.personas.length===0)formPersona(null,true);
 
 tripDoc.onSnapshot(snap=>{
   if(snap.exists){
-    state=snap.data();
+    state=migrateState(snap.data());
     try{localStorage.setItem('brc2026',JSON.stringify(state));}catch(e){}
+    if(_modalLocked&&state.personas.length>0){_modalLocked=false;$('modal-overlay').style.display='none';}
+    renderTitle();
     renderPanel(document.querySelector('.tab.active')?.dataset.tab||'resumen');
   } else {
     tripDoc.set(state);
