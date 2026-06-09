@@ -484,6 +484,7 @@ function formPersona(p,firstRun){
     <div class="modal-actions">
       ${isEdit&&!firstRun&&state.personas.length>1?`<button class="btn-danger" onclick="deletePersona(${p.id})">Eliminar</button>`:''}
       ${!firstRun?`<button class="btn-secondary" onclick="closeModal()">Cancelar</button>`:''}
+      ${firstRun?`<button class="btn-secondary" onclick="_modalLocked=false;closeModal()">Después...</button>`:''}
       <button class="btn-primary" onclick="savePersona(${isEdit?p.id:0})">${firstRun?'Empezar':'Guardar'}</button>
     </div>`);
   setTimeout(()=>$('pn')&&$('pn').focus(),50);
