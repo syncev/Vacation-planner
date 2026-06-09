@@ -110,6 +110,9 @@ h3{font-size:15px;font-weight:500;margin-bottom:.75rem}
 .cal-day:hover{background:var(--color-background-tertiary)}
 .cal-day.sel{background:#1D9E75;color:white;font-weight:600}
 .cal-day.sel:hover{background:#18876A}
+#undo-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:#1c1c1a;color:#f0ede8;padding:.625rem 1.125rem;border-radius:20px;display:none;align-items:center;gap:.875rem;box-shadow:0 4px 20px rgba(0,0,0,.35);z-index:2000;font-size:13px;white-space:nowrap;animation:toastIn .2s ease}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@media(prefers-color-scheme:dark){#undo-toast{background:#f0ede8;color:#1c1c1a}#undo-btn{color:#1D9E75}}
 </style>
 </head>
 <body>
@@ -130,6 +133,8 @@ h3{font-size:15px;font-weight:500;margin-bottom:.75rem}
   <div id="panel-actividades" class="panel"></div>
   <div id="panel-traslados" class="panel"></div>
 </div>
+
+<div id="undo-toast"><span id="undo-label"></span><button id="undo-btn" style="background:none;border:none;color:#1D9E75;font-family:var(--font-sans);font-size:13px;font-weight:600;cursor:pointer;padding:0">Deshacer</button></div>
 
 <div id="modal-overlay" class="modal-overlay" style="display:none">
   <div class="modal" id="modal-box"></div>
@@ -217,6 +222,17 @@ function saveState(){
 
 function getSelected(arr){return arr?arr.find(i=>i.checked)||null:null;}
 function nextId(arr){return Math.max(0,...arr.map(i=>i.id))+1;}
+
+let _undoTimer=null;
+function showUndoToast(label,restoreFn){
+  clearTimeout(_undoTimer);
+  $('undo-label').textContent=label;
+  const t=$('undo-toast');t.style.display='flex';
+  t.style.animation='none';void t.offsetWidth;t.style.animation='toastIn .2s ease';
+  $('undo-btn').onclick=()=>{clearTimeout(_undoTimer);restoreFn();hideUndoToast();};
+  _undoTimer=setTimeout(hideUndoToast,5000);
+}
+function hideUndoToast(){$('undo-toast').style.display='none';}
 
 let _modalLocked=false;
 function openModal(html){$('modal-box').innerHTML=html;$('modal-overlay').style.display='flex';}
@@ -435,8 +451,11 @@ function saveSkiDia(id){
   saveState();closeModal();renderSki();renderResumen();
 }
 function deleteSkiDia(id){
-  state.ski.dias=(state.ski.dias||[]).filter(d=>d.id!==id);
+  const dias=state.ski.dias||[];
+  const item=dias.find(d=>d.id===id);const idx=dias.findIndex(d=>d.id===id);
+  state.ski.dias=dias.filter(d=>d.id!==id);
   saveState();renderSki();renderResumen();
+  showUndoToast('Día de ski eliminado',()=>{state.ski.dias.splice(Math.min(idx,state.ski.dias.length),0,item);saveState();renderSki();renderResumen();});
 }
 
 function copyTripUrl(){
@@ -515,9 +534,17 @@ function savePersona(id){
 }
 function deletePersona(id){
   if(state.personas.length<=1)return;
+  const persona=state.personas.find(p=>p.id===id);
+  const idx=state.personas.findIndex(p=>p.id===id);
+  const vuelos=state.vuelos[String(id)]||[];
   state.personas=state.personas.filter(p=>p.id!==id);
   delete state.vuelos[String(id)];
   saveState();closeModal();renderResumen();
+  showUndoToast(`"${persona.nombre}" eliminado`,()=>{
+    state.personas.splice(Math.min(idx,state.personas.length),0,persona);
+    state.vuelos[String(id)]=vuelos;
+    saveState();renderResumen();
+  });
 }
 
 function renderResumen(){
@@ -751,8 +778,15 @@ function saveVuelo(personaId,id){
 }
 function deleteVuelo(personaId,id){
   const k=String(personaId);
-  state.vuelos[k]=(state.vuelos[k]||[]).filter(v=>v.id!==id);
+  const arr=state.vuelos[k]||[];
+  const item=arr.find(v=>v.id===id);const idx=arr.findIndex(v=>v.id===id);
+  state.vuelos[k]=arr.filter(v=>v.id!==id);
   saveState();renderVuelos();renderResumen();
+  showUndoToast(`"${item.aerolinea||'Vuelo'}" eliminado`,()=>{
+    if(!state.vuelos[k])state.vuelos[k]=[];
+    state.vuelos[k].splice(Math.min(idx,state.vuelos[k].length),0,item);
+    saveState();renderVuelos();renderResumen();
+  });
 }
 
 function formHosp(h){
@@ -776,7 +810,12 @@ function saveHosp(id){
   if(id){state.hospedaje=state.hospedaje.map(h=>h.id===id?{...h,...n,id}:h);}else{state.hospedaje.push({...n,id:nextId(state.hospedaje)});}
   saveState();closeModal();renderHospedaje();renderResumen();
 }
-function deleteItem(col,id){state[col]=state[col].filter(i=>i.id!==id);saveState();renderPanel(col);renderResumen();}
+function deleteItem(col,id){
+  const item=state[col].find(i=>i.id===id);const idx=state[col].findIndex(i=>i.id===id);
+  state[col]=state[col].filter(i=>i.id!==id);
+  saveState();renderPanel(col);renderResumen();
+  showUndoToast(`"${item.nombre}" eliminado`,()=>{state[col].splice(Math.min(idx,state[col].length),0,item);saveState();renderPanel(col);renderResumen();});
+}
 
 function formSkiItem(key,item){
   const e=!!item;item=item||{nombre:'',descripcion:'',precio:'',link:'',notas:''};
@@ -797,7 +836,12 @@ function saveSkiItem(k,id){
   if(id){state.ski[k]=state.ski[k].map(i=>i.id===id?{...i,...n,id}:i);}else{state.ski[k].push({...n,id:nextId(state.ski[k])});}
   saveState();closeModal();renderSki();renderResumen();
 }
-function deleteSkiItem(k,id){state.ski[k]=state.ski[k].filter(i=>i.id!==id);saveState();renderSki();renderResumen();}
+function deleteSkiItem(k,id){
+  const item=state.ski[k].find(i=>i.id===id);const idx=state.ski[k].findIndex(i=>i.id===id);
+  state.ski[k]=state.ski[k].filter(i=>i.id!==id);
+  saveState();renderSki();renderResumen();
+  showUndoToast(`"${item.nombre}" eliminado`,()=>{state.ski[k].splice(Math.min(idx,state.ski[k].length),0,item);saveState();renderSki();renderResumen();});
+}
 
 function formActividad(a){
   const e=!!a;a=a||{nombre:'',tipo:'Excursión',precio:'',duracion:'',fecha:'',fechaFin:'',link:'',notas:''};
