@@ -41,8 +41,10 @@ body::-webkit-scrollbar{display:none}
 .app-wrapper{max-width:720px;margin:0 auto;padding:1.5rem 1rem}
 .app-title{font-size:22px;font-weight:500;margin-bottom:1.5rem}
 .app-title span{font-size:14px;color:var(--color-text-secondary);font-weight:400;margin-left:8px}
-.tabs{display:flex;gap:4px;border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:1.5rem;overflow-x:auto;padding-bottom:0;scrollbar-width:none}
+.tabs{display:flex;gap:4px;border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:1.5rem;overflow-x:auto;padding-bottom:0;scrollbar-width:none;align-items:flex-end}
 .tabs::-webkit-scrollbar{display:none}
+.tab-add{padding:6px 10px;border:none;background:none;cursor:pointer;color:var(--color-text-tertiary);font-size:16px;line-height:1;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:6px 6px 0 0;font-family:var(--font-sans)}
+.tab-add:hover{color:var(--color-text-primary);background:var(--color-background-secondary)}
 .tab{padding:8px 14px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--color-text-secondary);white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px;font-family:var(--font-sans)}
 .tab.active{color:var(--color-text-primary);border-bottom-color:var(--color-text-primary);font-weight:500}
 .tab:hover:not(.active){color:var(--color-text-primary);background:var(--color-background-secondary);border-radius:6px 6px 0 0}
@@ -129,6 +131,7 @@ h3{font-size:15px;font-weight:500;margin-bottom:.75rem}
     <button class="tab" data-tab="ski"><i class="ti ti-mountain"></i> Ski & Equipo</button>
     <button class="tab" data-tab="actividades"><i class="ti ti-map"></i> Actividades</button>
     <button class="tab" data-tab="traslados"><i class="ti ti-car"></i> Traslados</button>
+    <button id="tab-add-btn" class="tab-add" onclick="formCustomTab(null)" title="Nueva sección"><i class="ti ti-plus"></i></button>
   </div>
   <div id="panel-resumen" class="panel active"></div>
   <div id="panel-vuelos" class="panel"></div>
@@ -165,7 +168,8 @@ const DEFAULT = {
   hospedaje: [],
   ski: { dias: [], pase: [], equipo: [], ropa: [] },
   actividades: [],
-  traslados: []
+  traslados: [],
+  customTabs: []
 };
 
 function migrateState(s){
@@ -178,6 +182,7 @@ function migrateState(s){
   if(s.tripDate===undefined)s.tripDate='';
   if(s.ski&&!s.ski.dias)s.ski.dias=[];
   if(s.actividades)s.actividades=s.actividades.map(a=>({fecha:'',fechaFin:'',...a}));
+  if(!s.customTabs)s.customTabs=[];
   return s;
 }
 
@@ -195,13 +200,14 @@ function getSelected(arr){return arr?arr.find(i=>i.checked)||null:null;}
 function nextId(arr){return Math.max(0,...arr.map(i=>i.id))+1;}
 
 let _undoTimer=null;
-function showUndoToast(label,restoreFn,persistent=false){
+function showUndoToast(label,restoreFn,duration=5000){
+  // duration=0 → persistent; duration>0 → auto-dismiss after that many ms
   clearTimeout(_undoTimer);
   $('undo-label').textContent=label;
   const t=$('undo-toast');t.style.display='flex';
   t.style.animation='none';void t.offsetWidth;t.style.animation='toastIn .2s ease';
   $('undo-btn').onclick=()=>{clearTimeout(_undoTimer);restoreFn();hideUndoToast();};
-  if(!persistent)_undoTimer=setTimeout(hideUndoToast,5000);
+  if(duration)_undoTimer=setTimeout(hideUndoToast,duration);
 }
 function hideUndoToast(){$('undo-toast').style.display='none';}
 
@@ -711,9 +717,13 @@ function renderPanel(id){
   else if(id==='ski')renderSki();
   else if(id==='actividades')renderActividades();
   else if(id==='traslados')renderTraslados();
+  else renderCustomTab(id);
 }
 
-document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)));
+$('tabs').addEventListener('click',e=>{
+  const tab=e.target.closest('.tab[data-tab]');
+  if(tab)switchTab(tab.dataset.tab);
+});
 
 function toggleVuelo(personaId,id){
   const k=String(personaId);
@@ -861,6 +871,210 @@ function saveTraslado(id){
   saveState();closeModal();renderTraslados();renderResumen();
 }
 
+// ── Custom tabs ───────────────────────────────────────────────────────────────
+function newId(){return(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);}
+
+function renderTabs(){
+  $('tabs').querySelectorAll('[data-custom]').forEach(b=>b.remove());
+  document.querySelectorAll('.panel[data-custom]').forEach(p=>p.remove());
+  const wrapper=document.querySelector('.app-wrapper');
+  const addBtn=$('tab-add-btn');
+  (state.customTabs||[]).forEach(ct=>{
+    const btn=document.createElement('button');
+    btn.className='tab';btn.dataset.tab=ct.id;btn.dataset.custom='1';
+    btn.innerHTML=`<i class="ti ti-grid-dots"></i> ${ct.nombre}`;
+    $('tabs').insertBefore(btn,addBtn);
+    const panel=document.createElement('div');
+    panel.id='panel-'+ct.id;panel.className='panel';panel.dataset.custom='1';
+    wrapper.appendChild(panel);
+  });
+}
+
+function renderCustomTab(tabId){
+  const ct=(state.customTabs||[]).find(t=>t.id===tabId);
+  const el=$('panel-'+tabId);
+  if(!ct||!el)return;
+  const total=(ct.secciones||[]).reduce((sum,s)=>sum+(s.items||[]).filter(i=>i.checked).reduce((a,i)=>a+(i.precio||0),0),0);
+  el.innerHTML=`
+    <div class="section-header">
+      <div>
+        <h3 style="margin-bottom:${ct.descripcion?'3px':'0'}">${ct.nombre}</h3>
+        ${ct.descripcion?`<p style="font-size:12px;color:var(--color-text-secondary)">${ct.descripcion}</p>`:''}
+      </div>
+      <div style="display:flex;gap:.25rem">
+        <button class="btn-icon" onclick="formCustomTab('${tabId}')"><i class="ti ti-edit"></i></button>
+        <button class="btn-icon" style="color:#E24B4A" onclick="deleteCustomTab('${tabId}')"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>
+    ${total>0?`<div class="card" style="margin-bottom:1rem">
+      <div style="font-size:12px;color:var(--color-text-secondary)">Total seleccionado</div>
+      <div style="font-size:20px;font-weight:600;margin-top:2px">$${fmt(total)}</div>
+    </div>`:''}
+    ${(ct.secciones||[]).map(s=>`<div class="card" style="margin-bottom:.75rem">
+      <div class="section-header" style="padding-bottom:.75rem;margin-bottom:.75rem;border-bottom:.5px solid var(--color-border-tertiary)">
+        <h4 style="font-size:14px;font-weight:500">${s.nombre}</h4>
+        <div style="display:flex;gap:.25rem">
+          <button class="btn-icon" onclick="formCustomSection('${tabId}','${s.id}')"><i class="ti ti-edit"></i></button>
+          <button class="btn-icon" style="color:#E24B4A" onclick="deleteCustomSection('${tabId}','${s.id}')"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>
+      ${(s.items||[]).length===0?'<p style="font-size:12px;color:var(--color-text-tertiary);padding:.25rem 0 .75rem">Sin opciones aún.</p>':''}
+      ${(s.items||[]).map(item=>`<div class="card${item.checked?' done':''}">
+        <div class="card-row">
+          <div class="checkbox${item.checked?' checked':''}" onclick="toggleCustomItem('${tabId}','${s.id}',${item.id})"></div>
+          <div class="card-body">
+            <div class="item-name">${item.nombre}${item.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
+            <div class="item-meta">
+              ${item.precio?`<span class="price-tag">$${fmt(item.precio)}</span>`:''}
+              ${item.fecha?`<span>${fmtDate(item.fecha)}</span>`:''}
+              ${item.fechaFin&&item.fechaFin!==item.fecha?`<span>→ ${fmtDate(item.fechaFin)}</span>`:''}
+              ${item.notas?`<span>${item.notas}</span>`:''}
+            </div>
+          </div>
+          <div class="card-actions">
+            <button class="btn-icon" onclick="formCustomItem('${tabId}','${s.id}',${item.id})"><i class="ti ti-edit"></i></button>
+            <button class="btn-icon" onclick="deleteCustomItem('${tabId}','${s.id}',${item.id})"><i class="ti ti-trash"></i></button>
+          </div>
+        </div>
+      </div>`).join('')}
+      <button class="add-btn" onclick="formCustomItem('${tabId}','${s.id}',null)"><i class="ti ti-plus"></i> Agregar opción</button>
+    </div>`).join('')}
+    <button class="add-btn" onclick="formCustomSection('${tabId}',null)"><i class="ti ti-plus"></i> Agregar sub-sección</button>`;
+}
+
+function formCustomTab(tabId){
+  const ct=tabId?(state.customTabs||[]).find(t=>t.id===tabId):null;
+  const isEdit=!!ct;
+  openModal(`<h3>${isEdit?'Editar':'Nueva'} sección personalizada</h3>
+    <div class="form-group"><label>Nombre</label><input id="ctn" value="${ct?ct.nombre:''}" placeholder="ej: Auto &amp; Gastos"></div>
+    <div class="form-group"><label>Descripción <span style="color:var(--color-text-tertiary)">(opcional)</span></label><input id="ctd" value="${ct?ct.descripcion||'':''}" placeholder="ej: Alquiler de auto y gastos asociados"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveCustomTab(${isEdit?`'${tabId}'`:'null'})">${isEdit?'Guardar':'Crear'}</button>
+    </div>`);
+  setTimeout(()=>$('ctn')&&$('ctn').focus(),50);
+}
+
+function saveCustomTab(tabId){
+  const nombre=($('ctn').value||'').trim();if(!nombre)return;
+  const descripcion=($('ctd').value||'').trim();
+  if(!state.customTabs)state.customTabs=[];
+  if(tabId){
+    state.customTabs=state.customTabs.map(t=>t.id===tabId?{...t,nombre,descripcion}:t);
+    saveState();closeModal();renderTabs();
+    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tabId));
+    renderCustomTab(tabId);
+  } else {
+    const id='ct-'+newId();
+    state.customTabs.push({id,nombre,descripcion,secciones:[]});
+    saveState();closeModal();renderTabs();switchTab(id);
+  }
+}
+
+function deleteCustomTab(tabId){
+  const ct=(state.customTabs||[]).find(t=>t.id===tabId);if(!ct)return;
+  const idx=state.customTabs.indexOf(ct);
+  state.customTabs=state.customTabs.filter(t=>t.id!==tabId);
+  saveState();renderTabs();switchTab('resumen');
+  showUndoToast(`"${ct.nombre}" eliminado`,()=>{
+    state.customTabs.splice(Math.min(idx,state.customTabs.length),0,ct);
+    saveState();renderTabs();
+  },10000);
+}
+
+function formCustomSection(tabId,sectionId){
+  const ct=(state.customTabs||[]).find(t=>t.id===tabId);if(!ct)return;
+  const isEdit=!!sectionId;
+  const s=isEdit?ct.secciones.find(s=>s.id===sectionId):null;
+  openModal(`<h3>${isEdit?'Editar':'Nueva'} sub-sección</h3>
+    <div class="form-group"><label>Nombre</label><input id="csn" value="${s?s.nombre:''}" placeholder="ej: Alquiler, Combustible..."></div>
+    <div class="modal-actions">
+      ${isEdit?`<button class="btn-danger" onclick="deleteCustomSection('${tabId}','${sectionId}');closeModal()">Eliminar</button>`:''}
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveCustomSection('${tabId}','${isEdit?sectionId:null}')">${isEdit?'Guardar':'Crear'}</button>
+    </div>`);
+  setTimeout(()=>$('csn')&&$('csn').focus(),50);
+}
+
+function saveCustomSection(tabId,sectionId){
+  const nombre=($('csn').value||'').trim();if(!nombre)return;
+  const ct=(state.customTabs||[]).find(t=>t.id===tabId);if(!ct)return;
+  if(sectionId){
+    ct.secciones=ct.secciones.map(s=>s.id===sectionId?{...s,nombre}:s);
+  } else {
+    ct.secciones.push({id:'cs-'+newId(),nombre,items:[]});
+  }
+  saveState();closeModal();renderCustomTab(tabId);
+}
+
+function deleteCustomSection(tabId,sectionId){
+  const ct=(state.customTabs||[]).find(t=>t.id===tabId);if(!ct)return;
+  const s=ct.secciones.find(s=>s.id===sectionId);
+  const idx=ct.secciones.indexOf(s);
+  ct.secciones=ct.secciones.filter(s=>s.id!==sectionId);
+  saveState();renderCustomTab(tabId);
+  showUndoToast(`Sub-sección "${s.nombre}" eliminada`,()=>{
+    ct.secciones.splice(Math.min(idx,ct.secciones.length),0,s);
+    saveState();renderCustomTab(tabId);
+  });
+}
+
+function formCustomItem(tabId,sectionId,itemId){
+  const ct=(state.customTabs||[]).find(t=>t.id===tabId);if(!ct)return;
+  const s=ct.secciones.find(s=>s.id===sectionId);if(!s)return;
+  const isEdit=!!itemId;
+  const item=isEdit?s.items.find(i=>i.id===itemId):null;
+  const e=item||{nombre:'',precio:'',fecha:'',fechaFin:'',notas:''};
+  openModal(`<h3>${isEdit?'Editar':'Nueva'} opción — ${s.nombre}</h3>
+    <div class="form-group"><label>Nombre</label><input id="cin" value="${e.nombre}" placeholder="ej: Hertz compact"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Precio</label><input id="cip" type="number" value="${e.precio||''}" placeholder="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Fecha inicio</label><input id="cif" type="date" value="${e.fecha||''}"></div>
+      <div class="form-group"><label>Fecha fin</label><input id="ciff" type="date" value="${e.fechaFin||''}"></div>
+    </div>
+    <div class="form-group"><label>Notas</label><input id="cino" value="${e.notas||''}" placeholder="opcional"></div>
+    <div class="modal-actions">
+      ${isEdit?`<button class="btn-danger" onclick="deleteCustomItem('${tabId}','${sectionId}',${itemId});closeModal()">Eliminar</button>`:''}
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveCustomItem('${tabId}','${sectionId}',${isEdit?itemId:0})">${isEdit?'Guardar':'Agregar'}</button>
+    </div>`);
+  setTimeout(()=>$('cin')&&$('cin').focus(),50);
+}
+
+function saveCustomItem(tabId,sectionId,itemId){
+  const nombre=($('cin').value||'').trim();if(!nombre)return;
+  const ct=(state.customTabs||[]).find(t=>t.id===tabId);if(!ct)return;
+  const s=ct.secciones.find(s=>s.id===sectionId);if(!s)return;
+  const data={nombre,precio:parseFloat($('cip').value)||0,fecha:$('cif').value||'',fechaFin:$('ciff').value||'',notas:$('cino').value||''};
+  if(itemId){
+    s.items=s.items.map(i=>i.id===itemId?{...i,...data}:i);
+  } else {
+    data.id=Math.max(0,...s.items.map(i=>i.id))+1;data.checked=false;s.items.push(data);
+  }
+  saveState();closeModal();renderCustomTab(tabId);
+}
+
+function deleteCustomItem(tabId,sectionId,itemId){
+  const ct=(state.customTabs||[]).find(t=>t.id===tabId);if(!ct)return;
+  const s=ct.secciones.find(s=>s.id===sectionId);if(!s)return;
+  const item=s.items.find(i=>i.id===itemId);const idx=s.items.indexOf(item);
+  s.items=s.items.filter(i=>i.id!==itemId);
+  saveState();renderCustomTab(tabId);
+  showUndoToast(`"${item.nombre}" eliminado`,()=>{
+    s.items.splice(Math.min(idx,s.items.length),0,item);saveState();renderCustomTab(tabId);
+  });
+}
+
+function toggleCustomItem(tabId,sectionId,itemId){
+  const ct=(state.customTabs||[]).find(t=>t.id===tabId);if(!ct)return;
+  const s=ct.secciones.find(s=>s.id===sectionId);if(!s)return;
+  s.items=s.items.map(i=>({...i,checked:i.id===itemId?!i.checked:i.checked}));
+  saveState();renderCustomTab(tabId);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ── Admin panel ───────────────────────────────────────────────────────────────
 let _adminClicks=0,_adminCTimer=null;
 function onAdminGesture(){
@@ -974,7 +1188,7 @@ function deleteAdminTrip(tripId){
       showUndoToast(`"${nombre}" eliminado`,()=>{
         db.collection('trips').doc(tripId).set(tripData)
           .then(()=>renderAdminPanel());
-      },true);
+      },0);
     })
     .catch(err=>console.error('Error al borrar:',err));
 }
@@ -1002,6 +1216,7 @@ const tripDoc=db.collection('trips').doc(TRIP_ID);
 
 state=loadState();
 renderTitle();
+renderTabs();
 renderResumen();
 if(state.personas.length===0)formPersona(null,true);
 
@@ -1011,6 +1226,7 @@ tripDoc.onSnapshot(snap=>{
     try{localStorage.setItem(lsKey(),JSON.stringify(state));}catch(e){}
     if(_modalLocked&&state.personas.length>0){_modalLocked=false;$('modal-overlay').style.display='none';}
     renderTitle();
+    renderTabs();
     renderPanel(document.querySelector('.tab.active')?.dataset.tab||'resumen');
   }
   // No crear el documento automáticamente — se crea en el primer saveState()
