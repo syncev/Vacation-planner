@@ -1010,10 +1010,8 @@ tripDoc.onSnapshot(snap=>{
     if(_modalLocked&&state.personas.length>0){_modalLocked=false;$('modal-overlay').style.display='none';}
     renderTitle();
     renderPanel(document.querySelector('.tab.active')?.dataset.tab||'resumen');
-  } else {
-    state=JSON.parse(JSON.stringify(DEFAULT));
-    tripDoc.set(state);
   }
+  // No crear el documento automáticamente — se crea en el primer saveState()
 },err=>console.error('Firestore:',err));
 </script>
 </body>
