@@ -170,7 +170,9 @@ const DEFAULT = {
   actividades: [],
   traslados: [],
   customTabs: [],
-  skiVisible: true
+  skiVisible: true,
+  skiName: 'Ski & Equipo',
+  skiDesc: ''
 };
 
 function migrateState(s){
@@ -186,6 +188,8 @@ function migrateState(s){
   if(!s.customTabs)s.customTabs=[];
   else s.customTabs=s.customTabs.map(ct=>({fechas:[],...ct}));
   if(s.skiVisible===undefined)s.skiVisible=true;
+  if(!s.skiName)s.skiName='Ski & Equipo';
+  if(s.skiDesc===undefined)s.skiDesc='';
   return s;
 }
 
@@ -651,8 +655,9 @@ function renderHospedaje(){
 }
 
 function skiSection(key,title){
-  const list=state.ski[key];
+  const list=state.ski[key]||[];
   return`<div style="margin-bottom:1.5rem"><div class="section-header"><h3>${title}</h3></div>
+  ${list.length===0?`<p style="font-size:12px;color:var(--color-text-tertiary);padding:.25rem 0 .5rem">Sin opciones cargadas. Usá <strong>+ Agregar opción</strong> para comparar alternativas.</p>`:''}
   ${list.map(item=>`<div class="card${item.checked?' done':''}"><div class="card-row">
     <div class="checkbox${item.checked?' checked':''}" onclick="toggleSki('${key}',${item.id})"></div>
     <div class="card-body"><div class="item-name">${item.nombre}${item.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
@@ -672,7 +677,16 @@ function renderSki(){
   const ropa=getSelected(state.ski.ropa);
   const total=(pase?.precio||0)+(equipo?.precio||0)+(ropa?.precio||0);
   const skiDiasCnt=(state.ski.dias||[]).length;
-  $('panel-ski').innerHTML=`<div class="section-header"><h3>Ski & Equipo</h3><button class="btn-icon" style="color:#E24B4A" onclick="deleteSki()" title="Eliminar sección"><i class="ti ti-trash"></i></button></div>
+  $('panel-ski').innerHTML=`<div class="section-header">
+    <div>
+      <h3 style="margin-bottom:${state.skiDesc?'3px':'0'}">${state.skiName||'Ski & Equipo'}</h3>
+      ${state.skiDesc?`<p style="font-size:12px;color:var(--color-text-secondary)">${state.skiDesc}</p>`:''}
+    </div>
+    <div style="display:flex;gap:.25rem">
+      <button class="btn-icon" onclick="formSkiTab()"><i class="ti ti-edit"></i></button>
+      <button class="btn-icon" style="color:#E24B4A" onclick="deleteSki()"><i class="ti ti-trash"></i></button>
+    </div>
+  </div>
   ${total>0?`<div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.75rem 1rem;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;color:var(--color-text-secondary)">Costo estimado p/persona${skiDiasCnt>1?' · '+skiDiasCnt+' días':''}</span><span style="font-weight:500;font-size:15px">$${fmt(total*Math.max(skiDiasCnt,1))}</span></div>`:''}
   ${renderSkiDias()}
   <div class="divider"></div>
@@ -892,13 +906,32 @@ function renderTabs(){
     wrapper.appendChild(panel);
   });
   const skiBtn=document.querySelector('.tab[data-tab="ski"]');
-  if(skiBtn)skiBtn.style.display=state.skiVisible===false?'none':'';
+  if(skiBtn){
+    skiBtn.style.display=state.skiVisible===false?'none':'';
+    skiBtn.innerHTML=`<i class="ti ti-mountain"></i> ${state.skiName||'Ski & Equipo'}`;
+  }
 }
 
+function formSkiTab(){
+  openModal(`<h3>Editar sección</h3>
+    <div class="form-group"><label>Nombre</label><input id="stn" value="${state.skiName||'Ski &amp; Equipo'}" placeholder="ej: Ski &amp; Equipo"></div>
+    <div class="form-group"><label>Descripción <span style="color:var(--color-text-tertiary)">(opcional)</span></label><input id="std" value="${state.skiDesc||''}" placeholder="ej: Cerro Catedral, agosto"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveSkiTab()">Guardar</button>
+    </div>`);
+  setTimeout(()=>$('stn')&&$('stn').focus(),50);
+}
+function saveSkiTab(){
+  state.skiName=($('stn').value||'').trim()||'Ski & Equipo';
+  state.skiDesc=($('std').value||'').trim();
+  saveState();closeModal();renderTabs();renderSki();
+}
 function deleteSki(){
+  const nombre=state.skiName||'Ski & Equipo';
   state.skiVisible=false;
   saveState();renderTabs();switchTab('resumen');
-  showUndoToast('Ski & Equipo eliminado',()=>{
+  showUndoToast(`"${nombre}" eliminado`,()=>{
     state.skiVisible=true;saveState();renderTabs();
   },10000);
 }
