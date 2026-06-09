@@ -36,7 +36,8 @@
   }
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--font-sans);background:var(--color-background-tertiary);color:var(--color-text-primary);font-size:14px;min-height:100vh}
+body{font-family:var(--font-sans);background:var(--color-background-tertiary);color:var(--color-text-primary);font-size:14px;min-height:100vh;scrollbar-width:none}
+body::-webkit-scrollbar{display:none}
 .app-wrapper{max-width:720px;margin:0 auto;padding:1.5rem 1rem}
 .app-title{font-size:22px;font-weight:500;margin-bottom:1.5rem}
 .app-title span{font-size:14px;color:var(--color-text-secondary);font-weight:400;margin-left:8px}
@@ -154,6 +155,7 @@ const DEFAULT = {
     {id:11,nombre:'Villa Catedral — Airbnb AR',plataforma:'Airbnb AR',fechas:'ref jul-ago',precioTotal:400,checked:false,link:'https://www.airbnb.com.ar/rooms/17886055',notas:'Precio en USD'},
   ],
   ski: {
+    dias: [],
     pase: [{id:1,nombre:'Pase Cerro Catedral',descripcion:'1 día, adulto',precio:160000,checked:false,link:'https://catedralaltapatagonia.com',notas:''}],
     equipo: [
       {id:1,nombre:'Epic Bariloche',descripcion:'Standard diario — esquís + botas + bastones',precio:52000,checked:false,link:'https://www.epicbariloche.com.ar/productos/alquiler-standard-diario1/',notas:''},
@@ -169,11 +171,11 @@ const DEFAULT = {
     ]
   },
   actividades: [
-    {id:1,nombre:'Cerro Catedral (2do día ski)',tipo:'Ski',precio:160000,duracion:'Día completo',checked:false,link:'',notas:'Mismo pase que día 1'},
-    {id:2,nombre:'Piedras Blancas — trineos / snow tubing',tipo:'Excursión',precio:0,duracion:'Medio día',checked:false,link:'http://www.piedrasblancasbariloche.com/actividades.html',notas:''},
-    {id:3,nombre:'Cerro Otto (teleférico)',tipo:'Excursión',precio:0,duracion:'Medio día',checked:false,link:'https://www.telefericobariloche.com.ar/en',notas:''},
-    {id:4,nombre:'Villa Llao Llao + Cerro Campanario',tipo:'Circuito',precio:0,duracion:'Día completo',checked:false,link:'https://cerrocampanario.com.ar/',notas:''},
-    {id:5,nombre:'Circuito Chico (lunes mañana)',tipo:'Circuito',precio:0,duracion:'Mañana',checked:false,link:'',notas:'Día 4 — mañana libre'},
+    {id:1,nombre:'Cerro Catedral (2do día ski)',tipo:'Ski',precio:160000,duracion:'Día completo',fecha:'',fechaFin:'',checked:false,link:'',notas:'Mismo pase que día 1'},
+    {id:2,nombre:'Piedras Blancas — trineos / snow tubing',tipo:'Excursión',precio:0,duracion:'Medio día',fecha:'',fechaFin:'',checked:false,link:'http://www.piedrasblancasbariloche.com/actividades.html',notas:''},
+    {id:3,nombre:'Cerro Otto (teleférico)',tipo:'Excursión',precio:0,duracion:'Medio día',fecha:'',fechaFin:'',checked:false,link:'https://www.telefericobariloche.com.ar/en',notas:''},
+    {id:4,nombre:'Villa Llao Llao + Cerro Campanario',tipo:'Circuito',precio:0,duracion:'Día completo',fecha:'',fechaFin:'',checked:false,link:'https://cerrocampanario.com.ar/',notas:''},
+    {id:5,nombre:'Circuito Chico (lunes mañana)',tipo:'Circuito',precio:0,duracion:'Mañana',fecha:'',fechaFin:'',checked:false,link:'',notas:''},
   ],
   traslados: [
     {id:1,nombre:'Aeropuerto BRC → Hospedaje',tipo:'Remis / Transfer',precio:0,checked:false,notas:'A cotizar en llegada'},
@@ -193,6 +195,8 @@ function migrateState(s){
   if(!s.vuelos||Array.isArray(s.vuelos))s.vuelos={};
   if(!s.tripName)s.tripName='Mi Viaje';
   if(s.tripDate===undefined)s.tripDate='';
+  if(s.ski&&!s.ski.dias)s.ski.dias=[];
+  if(s.actividades)s.actividades=s.actividades.map(a=>({fecha:'',fechaFin:'',...a}));
   return s;
 }
 
@@ -233,6 +237,74 @@ function saveTitle(){
   state.tripDate=$('ttd').value.trim();
   saveState();closeModal();renderTitle();
 }
+function fmtDate(iso){
+  if(!iso)return'';
+  const[y,m,d]=iso.split('-').map(Number);
+  return new Date(y,m-1,d).toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'}).replace(/\./g,'');
+}
+
+function buildItinerary(){
+  const byDate={};
+  (state.ski.dias||[]).forEach(d=>{
+    if(!d.fecha)return;
+    if(!byDate[d.fecha])byDate[d.fecha]=[];
+    byDate[d.fecha].push({icon:'ti-mountain',label:'Ski — Cerro Catedral',note:d.notas||''});
+  });
+  state.actividades.forEach(a=>{
+    if(!a.fecha)return;
+    if(!byDate[a.fecha])byDate[a.fecha]=[];
+    const note=a.fechaFin?`Hasta el ${fmtDate(a.fechaFin)}`:(a.duracion||'');
+    byDate[a.fecha].push({icon:'ti-map',label:a.nombre,note,badge:a.tipo});
+  });
+  const sortedDates=Object.keys(byDate).sort();
+  const undatedSki=(state.ski.dias||[]).filter(d=>!d.fecha);
+  const undatedAct=state.actividades.filter(a=>!a.fecha);
+  return{byDate,sortedDates,undatedSki,undatedAct};
+}
+
+function renderSkiDias(){
+  const dias=state.ski.dias||[];
+  return`<div style="margin-bottom:1.5rem">
+    <div class="section-header"><h3>Días de ski</h3><button class="btn-icon" onclick="addSkiDia()" title="Agregar día" style="font-size:18px"><i class="ti ti-plus"></i></button></div>
+    ${dias.length===0?'<p style="font-size:12px;color:var(--color-text-tertiary);padding:.5rem 0">Sin días planificados. Agregá uno para que aparezca en el itinerario.</p>':''}
+    ${dias.map(d=>`<div class="card"><div class="card-row">
+      <i class="ti ti-mountain" style="font-size:18px;color:var(--color-text-secondary);flex-shrink:0;margin-top:2px"></i>
+      <div class="card-body">
+        <div class="item-name">${d.fecha?fmtDate(d.fecha):'Sin fecha'}</div>
+        ${d.notas?`<div class="item-meta"><span style="color:var(--color-text-secondary)">${d.notas}</span></div>`:''}
+      </div>
+      <div class="card-actions">
+        <button class="btn-icon" onclick="editSkiDia(${d.id})"><i class="ti ti-edit"></i></button>
+        <button class="btn-icon" onclick="deleteSkiDia(${d.id})"><i class="ti ti-trash"></i></button>
+      </div>
+    </div></div>`).join('')}
+  </div>`;
+}
+function formSkiDia(d){
+  const isEdit=!!d;d=d||{fecha:'',notas:''};
+  openModal(`<h3>${isEdit?'Editar día de ski':'Agregar día de ski'}</h3>
+    <div class="form-group"><label>Fecha</label><input id="skd" type="date" value="${d.fecha||''}"></div>
+    <div class="form-group"><label>Notas</label><input id="skn" value="${d.notas||''}" placeholder="ej: iniciación, pista verde"></div>
+    <div class="modal-actions">
+      ${isEdit?`<button class="btn-danger" onclick="deleteSkiDia(${d.id});closeModal()">Eliminar</button>`:''}
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveSkiDia(${isEdit?d.id:0})">Guardar</button>
+    </div>`);
+}
+function addSkiDia(){formSkiDia(null);}
+function editSkiDia(id){formSkiDia((state.ski.dias||[]).find(d=>d.id===id));}
+function saveSkiDia(id){
+  if(!state.ski.dias)state.ski.dias=[];
+  const n={fecha:$('skd').value,notas:$('skn').value};
+  if(id){state.ski.dias=state.ski.dias.map(d=>d.id===id?{...d,...n}:d);}
+  else{state.ski.dias.push({...n,id:nextId(state.ski.dias)});}
+  saveState();closeModal();renderSki();renderResumen();
+}
+function deleteSkiDia(id){
+  state.ski.dias=(state.ski.dias||[]).filter(d=>d.id!==id);
+  saveState();renderSki();renderResumen();
+}
+
 function copyTripUrl(){
   navigator.clipboard.writeText(location.href).then(()=>{
     const btn=$('copy-url-btn');
@@ -247,13 +319,15 @@ function calcResumen(){
   const pase=getSelected(state.ski.pase);
   const equipo=getSelected(state.ski.equipo);
   const ropa=getSelected(state.ski.ropa);
-  const skiPP=(pase?.precio||0)+(equipo?.precio||0)+(ropa?.precio||0);
+  const skiPorDia=(pase?.precio||0)+(equipo?.precio||0)+(ropa?.precio||0);
+  const skiDias=(state.ski.dias||[]).length;
+  const skiPP=skiPorDia*Math.max(skiDias,1);
   const act=getSelected(state.actividades);
   const personas=state.personas.map(p=>{
     const vuelo=getSelected(state.vuelos[String(p.id)]||[]);
     return{...p,vuelo,total:(vuelo?.precio||0)+hospPP+skiPP};
   });
-  return{personas,hosp,hospPP,pase,equipo,ropa,skiPP,act,n};
+  return{personas,hosp,hospPP,pase,equipo,ropa,skiPP,skiDias,act,n};
 }
 
 function platformBadge(p){
@@ -317,14 +391,22 @@ function renderResumen(){
   const confirmed=[r.hosp,r.pase,r.equipo,r.ropa].filter(Boolean).length+r.personas.filter(p=>p.vuelo).length;
   const total=4+r.personas.length;
   const pct=total>0?Math.round(confirmed/total*100):0;
-  const itinerary=[
-    {fecha:'Jue 13 ago',act:'Llegada a Bariloche',note:'Confirmar hora de vuelo'},
-    {fecha:'Vie 14 ago',act:'Check-in hospedaje · explorar el centro',note:''},
-    {fecha:'Sáb 15 ago',act:'Ski en Cerro Catedral (día completo)',note:'Alquilar equipo + ropa con anticipación'},
-    {fecha:'Dom 16 ago',act:'2do día de ski o excursión alternativa',note:'Ver pestaña actividades'},
-    {fecha:'Lun 17 ago',act:'Recorrido circuito (mañana) · trabajo remoto',note:''},
-    {fecha:'Mar 18 ago',act:'Check-out · viaje de vuelta',note:'Confirmar hora de vuelo'},
-  ];
+  const it=buildItinerary();
+  const itDated=it.sortedDates.map(date=>`<div class="itinerary-day">
+    <div class="itinerary-day-header"><span class="day-label">${fmtDate(date)}</span></div>
+    ${it.byDate[date].map(e=>`<div style="display:flex;align-items:center;gap:6px;padding:4px 0">
+      <i class="ti ${e.icon}" style="font-size:13px;color:var(--color-text-secondary)"></i>
+      <span style="font-size:13px">${e.label}</span>
+      ${e.note?`<span style="font-size:11px;color:var(--color-text-secondary)">${e.note}</span>`:''}
+      ${e.badge?`<span class="badge badge-gray" style="font-size:10px;padding:1px 6px">${e.badge}</span>`:''}
+    </div>`).join('')}
+  </div>`).join('');
+  const itUndated=(it.undatedSki.length>0||it.undatedAct.length>0)?`<div style="margin-top:.5rem;padding:.75rem 1rem;border:.5px dashed var(--color-border-tertiary);border-radius:var(--border-radius-md)">
+    <div style="font-size:11px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">Sin fecha asignada</div>
+    ${it.undatedSki.map(()=>`<div style="display:flex;align-items:center;gap:6px;padding:3px 0"><i class="ti ti-mountain" style="font-size:13px;color:var(--color-text-secondary)"></i><span style="font-size:13px;color:var(--color-text-secondary)">Ski — sin fecha</span></div>`).join('')}
+    ${it.undatedAct.map(a=>`<div style="display:flex;align-items:center;gap:6px;padding:3px 0"><i class="ti ti-map" style="font-size:13px;color:var(--color-text-secondary)"></i><span style="font-size:13px;color:var(--color-text-secondary)">${a.nombre}${a.tipo?' · '+a.tipo:''}</span></div>`).join('')}
+  </div>`:'';
+  const itEmpty=it.sortedDates.length===0&&it.undatedSki.length===0&&it.undatedAct.length===0?`<p style="font-size:12px;color:var(--color-text-tertiary)">Agregá fechas a actividades y días de ski para ver el itinerario.</p>`:'';
   $('panel-resumen').innerHTML=`
 <h2>Resumen del viaje</h2>
 <div style="display:flex;align-items:center;gap:8px;padding:.625rem .875rem;background:var(--color-background-secondary);border-radius:var(--border-radius-md);margin-bottom:1.25rem;border:.5px solid var(--color-border-tertiary)">
@@ -352,7 +434,7 @@ ${renderPersonas()}
     <div class="metric-sub">${r.hosp?r.hosp.nombre+(r.n>1?' · entre '+r.n:''):'Sin seleccionar'}</div>
   </div>
   <div class="metric-card">
-    <div class="metric-label">Día de ski por persona</div>
+    <div class="metric-label">Ski${r.skiDias>1?' ('+r.skiDias+' días)':''} por persona</div>
     <div class="metric-value">$${fmt(r.skiPP)}</div>
     <div class="metric-sub">Pase + equipo + ropa</div>
   </div>
@@ -369,7 +451,7 @@ ${lineItem('Actividad día 3',r.act?r.act.nombre:'Sin seleccionar',r.act&&r.act.
 </div>
 <div class="divider"></div>
 <h3>Itinerario</h3>
-${itinerary.map(d=>`<div class="itinerary-day"><div class="itinerary-day-header"><span class="day-label">${d.fecha}</span><span class="day-activity">${d.act}</span></div>${d.note?`<div class="day-note">${d.note}</div>`:''}</div>`).join('')}`;
+${itEmpty}${itDated}${itUndated}`;
 }
 
 function lineItem(label,name,price,tab){
@@ -447,8 +529,11 @@ function renderSki(){
   const equipo=getSelected(state.ski.equipo);
   const ropa=getSelected(state.ski.ropa);
   const total=(pase?.precio||0)+(equipo?.precio||0)+(ropa?.precio||0);
-  $('panel-ski').innerHTML=`<h2>Ski & Equipo <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">Sáb 15 ago · Cerro Catedral</span></h2>
-  ${total>0?`<div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.75rem 1rem;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;color:var(--color-text-secondary)">Total estimado día de ski (p/persona)</span><span style="font-weight:500;font-size:15px">$${fmt(total)}</span></div>`:''}
+  const skiDiasCnt=(state.ski.dias||[]).length;
+  $('panel-ski').innerHTML=`<h2>Ski & Equipo <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">Cerro Catedral</span></h2>
+  ${total>0?`<div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.75rem 1rem;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;color:var(--color-text-secondary)">Costo estimado p/persona${skiDiasCnt>1?' · '+skiDiasCnt+' días':''}</span><span style="font-weight:500;font-size:15px">$${fmt(total*Math.max(skiDiasCnt,1))}</span></div>`:''}
+  ${renderSkiDias()}
+  <div class="divider"></div>
   ${skiSection('pase','Pase de ski')}
   <div class="divider"></div>
   ${skiSection('equipo','Alquiler de equipo')}
@@ -581,12 +666,16 @@ function saveSkiItem(k,id){
 function deleteSkiItem(k,id){state.ski[k]=state.ski[k].filter(i=>i.id!==id);saveState();renderSki();renderResumen();}
 
 function formActividad(a){
-  const e=!!a;a=a||{nombre:'',tipo:'Excursión',precio:'',duracion:'',link:'',notas:''};
+  const e=!!a;a=a||{nombre:'',tipo:'Excursión',precio:'',duracion:'',fecha:'',fechaFin:'',link:'',notas:''};
   openModal(`<h3>${e?'Editar actividad':'Nueva actividad'}</h3>
     <div class="form-group"><label>Nombre</label><input id="an" value="${a.nombre}"></div>
     <div class="form-row"><div class="form-group"><label>Tipo</label><select id="at">
     ${['Ski','Excursión','Circuito','Otro'].map(o=>`<option ${a.tipo===o?'selected':''}>${o}</option>`).join('')}
-    </select></div><div class="form-group"><label>Duración</label><input id="ad" value="${a.duracion}" placeholder="ej: Medio día"></div></div>
+    </select></div><div class="form-group"><label>Duración</label><input id="ad" value="${a.duracion||''}" placeholder="ej: Medio día"></div></div>
+    <div class="form-row">
+      <div class="form-group"><label>Fecha</label><input id="afe" type="date" value="${a.fecha||''}"></div>
+      <div class="form-group"><label>Fecha fin <span style="font-weight:400;color:var(--color-text-tertiary)">(opcional)</span></label><input id="aff" type="date" value="${a.fechaFin||''}"></div>
+    </div>
     <div class="form-group"><label>Precio (ARS)</label><input id="apr" type="number" value="${a.precio}"></div>
     <div class="form-group"><label>Link</label><input id="al" value="${a.link}" placeholder="https://..."></div>
     <div class="form-group"><label>Notas</label><textarea id="ano">${a.notas||''}</textarea></div>
@@ -597,7 +686,7 @@ function formActividad(a){
 function addActividad(){formActividad(null);}
 function editActividad(id){formActividad(state.actividades.find(a=>a.id===id));}
 function saveActividad(id){
-  const n={nombre:$('an').value,tipo:$('at').value,duracion:$('ad').value,precio:parseFloat($('apr').value)||0,link:$('al').value,notas:$('ano').value,checked:false};
+  const n={nombre:$('an').value,tipo:$('at').value,duracion:$('ad').value,fecha:$('afe').value,fechaFin:$('aff').value,precio:parseFloat($('apr').value)||0,link:$('al').value,notas:$('ano').value,checked:false};
   if(id){state.actividades=state.actividades.map(a=>a.id===id?{...a,...n,id}:a);}else{state.actividades.push({...n,id:nextId(state.actividades)});}
   saveState();closeModal();renderActividades();renderResumen();
 }
