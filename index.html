@@ -946,9 +946,10 @@ function renderAdminPanel(){
               <div style="font-size:12px;color:var(--color-text-secondary);margin-top:4px"><i class="ti ti-users" style="font-size:11px"></i> ${personas}</div>
               <div class="trip-hash">#${t.id}</div>
             </div>
-            <button class="btn-danger" style="flex-shrink:0;padding:6px 10px" onclick="deleteAdminTrip('${t.id}')">
-              <i class="ti ti-trash"></i>
-            </button>
+            <div style="display:flex;gap:.375rem;flex-shrink:0;align-items:center">
+              <button class="btn-icon" title="Abrir viaje" onclick="window.open('${location.origin+location.pathname}#${t.id}','_blank')"><i class="ti ti-external-link"></i></button>
+              <button class="btn-danger" style="padding:6px 10px" onclick="deleteAdminTrip('${t.id}')"><i class="ti ti-trash"></i></button>
+            </div>
           </div>`;
         }).join('');
     })
