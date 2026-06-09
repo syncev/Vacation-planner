@@ -267,6 +267,8 @@ function buildItinerary(){
 }
 
 let _calSelected=new Set();
+let _calNotes={};
+let _calStartYear=0,_calStartMonth=0;
 const CAL_MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const CAL_DAYS=['Lu','Ma','Mi','Ju','Vi','Sá','Do'];
 
@@ -277,8 +279,7 @@ function renderCalMonth(year,month){
   for(let i=0;i<firstDow;i++)cells.push(`<div></div>`);
   for(let d=1;d<=total;d++){
     const iso=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const sel=_calSelected.has(iso);
-    cells.push(`<div class="cal-day${sel?' sel':''}" id="cal-${iso}" onclick="toggleCalDay('${iso}')">${d}</div>`);
+    cells.push(`<div class="cal-day${_calSelected.has(iso)?' sel':''}" id="cal-${iso}" onclick="toggleCalDay('${iso}')">${d}</div>`);
   }
   return`<div style="flex:1;min-width:190px">
     <div style="text-align:center;font-size:12px;font-weight:500;margin-bottom:.5rem;color:var(--color-text-secondary)">${CAL_MONTHS[month]} ${year}</div>
@@ -289,12 +290,8 @@ function renderCalMonth(year,month){
   </div>`;
 }
 
-function toggleCalDay(iso){
-  if(_calSelected.has(iso)){_calSelected.delete(iso);}
-  else{_calSelected.add(iso);}
-  const el=document.getElementById('cal-'+iso);
-  if(el){el.classList.toggle('sel',_calSelected.has(iso));}
-  updateCalCount();
+function calSaveNotes(){
+  Array.from(_calSelected).forEach(iso=>{const el=document.getElementById('cal-note-'+iso);if(el)_calNotes[iso]=el.value;});
 }
 
 function updateCalCount(){
@@ -302,33 +299,98 @@ function updateCalCount(){
   if(el){const n=_calSelected.size;el.textContent=n===0?'Ningún día seleccionado':n===1?'1 día seleccionado':n+' días seleccionados';}
 }
 
+function updateCalSelectedList(){
+  calSaveNotes();
+  const listEl=document.getElementById('cal-selected-list');
+  if(!listEl)return;
+  const sorted=Array.from(_calSelected).sort();
+  if(sorted.length===0){listEl.innerHTML='';return;}
+  listEl.innerHTML=`<div class="divider" style="margin:.625rem 0"></div>
+    <div style="font-size:11px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">Notas por día <span style="font-weight:400;text-transform:none">(opcional)</span></div>`+
+    sorted.map(iso=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:.375rem">
+      <span style="font-size:12px;font-weight:500;min-width:105px;flex-shrink:0">${fmtDate(iso)}</span>
+      <input id="cal-note-${iso}" type="text" value="${(_calNotes[iso]||'').replace(/"/g,'&quot;')}" placeholder="nota opcional..." style="flex:1;font-family:var(--font-sans);font-size:12px;padding:5px 8px;border:.5px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary);outline:none">
+    </div>`).join('');
+}
+
+function toggleCalDay(iso){
+  if(_calSelected.has(iso))_calSelected.delete(iso);
+  else _calSelected.add(iso);
+  const el=document.getElementById('cal-'+iso);
+  if(el)el.classList.toggle('sel',_calSelected.has(iso));
+  updateCalCount();
+  updateCalSelectedList();
+}
+
+function calTitle(){
+  const y2=_calStartMonth===11?_calStartYear+1:_calStartYear;
+  const m2=_calStartMonth===11?0:_calStartMonth+1;
+  return _calStartYear===y2?
+    `${CAL_MONTHS[_calStartMonth].slice(0,3)} – ${CAL_MONTHS[m2].slice(0,3)} ${_calStartYear}`:
+    `${CAL_MONTHS[_calStartMonth].slice(0,3)} ${_calStartYear} – ${CAL_MONTHS[m2].slice(0,3)} ${y2}`;
+}
+
+function rerenderCalGrids(){
+  const y2=_calStartMonth===11?_calStartYear+1:_calStartYear;
+  const m2=_calStartMonth===11?0:_calStartMonth+1;
+  const g=document.getElementById('cal-grids');
+  if(g)g.innerHTML=renderCalMonth(_calStartYear,_calStartMonth)+renderCalMonth(y2,m2);
+  const t=document.getElementById('cal-title');
+  if(t)t.textContent=calTitle();
+  const now=new Date();
+  const pb=document.getElementById('cal-prev');
+  if(pb)pb.disabled=(_calStartYear===now.getFullYear()&&_calStartMonth===now.getMonth());
+}
+
+function navCal(delta){
+  calSaveNotes();
+  _calStartMonth+=delta;
+  if(_calStartMonth>11){_calStartMonth=0;_calStartYear++;}
+  if(_calStartMonth<0){_calStartMonth=11;_calStartYear--;}
+  const now=new Date();
+  if(_calStartYear<now.getFullYear()||(_calStartYear===now.getFullYear()&&_calStartMonth<now.getMonth())){
+    _calStartMonth-=delta;
+    if(_calStartMonth>11){_calStartMonth=0;_calStartYear++;}
+    if(_calStartMonth<0){_calStartMonth=11;_calStartYear--;}
+    return;
+  }
+  rerenderCalGrids();
+}
+
 function openSkiCalendar(){
   _calSelected=new Set((state.ski.dias||[]).map(d=>d.fecha).filter(Boolean));
+  _calNotes={};
+  (state.ski.dias||[]).forEach(d=>{if(d.fecha&&d.notas)_calNotes[d.fecha]=d.notas;});
   const now=new Date();
-  const y1=now.getFullYear(),m1=now.getMonth();
-  const y2=m1===11?y1+1:y1,m2=m1===11?0:m1+1;
+  _calStartYear=now.getFullYear();_calStartMonth=now.getMonth();
   openModal(`<h3>Días de ski</h3>
-    <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:.875rem">Tocá los días para seleccionarlos o deseleccionarlos.</p>
-    <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:.875rem">
-      ${renderCalMonth(y1,m1)}
-      ${renderCalMonth(y2,m2)}
+    <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:.75rem">Tocá los días para seleccionarlos.</p>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem">
+      <button id="cal-prev" class="btn-icon" onclick="navCal(-1)" disabled><i class="ti ti-chevron-left"></i></button>
+      <span id="cal-title" style="font-size:12px;color:var(--color-text-secondary)">${calTitle()}</span>
+      <button class="btn-icon" onclick="navCal(1)"><i class="ti ti-chevron-right"></i></button>
     </div>
-    <div id="cal-count" style="font-size:12px;font-weight:500;color:#1D9E75;margin-bottom:.25rem">${_calSelected.size===0?'Ningún día seleccionado':_calSelected.size===1?'1 día seleccionado':_calSelected.size+' días seleccionados'}</div>
+    <div id="cal-grids" style="display:flex;gap:1.5rem;flex-wrap:wrap">
+      ${renderCalMonth(_calStartYear,_calStartMonth)}${(()=>{const y2=_calStartMonth===11?_calStartYear+1:_calStartYear;const m2=_calStartMonth===11?0:_calStartMonth+1;return renderCalMonth(y2,m2);})()}
+    </div>
+    <div id="cal-count" style="font-size:12px;font-weight:500;color:#1D9E75;margin-top:.75rem">${_calSelected.size===0?'Ningún día seleccionado':_calSelected.size===1?'1 día seleccionado':_calSelected.size+' días seleccionados'}</div>
+    <div id="cal-selected-list"></div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
       <button class="btn-primary" onclick="saveSkiCalendar()">Guardar</button>
     </div>`);
+  if(_calSelected.size>0)updateCalSelectedList();
 }
 
 function saveSkiCalendar(){
+  calSaveNotes();
   const existingByDate={};
   (state.ski.dias||[]).forEach(d=>{if(d.fecha)existingByDate[d.fecha]=d;});
   let maxId=Math.max(0,...(state.ski.dias||[]).map(d=>d.id));
-  const newDias=[];
-  Array.from(_calSelected).sort().forEach(fecha=>{
-    newDias.push(existingByDate[fecha]||{id:++maxId,fecha,notas:''});
+  state.ski.dias=Array.from(_calSelected).sort().map(fecha=>{
+    const notas=_calNotes[fecha]||'';
+    return existingByDate[fecha]?{...existingByDate[fecha],notas}:{id:++maxId,fecha,notas};
   });
-  state.ski.dias=newDias;
   saveState();closeModal();renderSki();renderResumen();
 }
 
