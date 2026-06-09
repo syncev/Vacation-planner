@@ -1003,7 +1003,7 @@ function formCustomSection(tabId,sectionId){
     <div class="modal-actions">
       ${isEdit?`<button class="btn-danger" onclick="deleteCustomSection('${tabId}','${sectionId}');closeModal()">Eliminar</button>`:''}
       <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
-      <button class="btn-primary" onclick="saveCustomSection('${tabId}','${isEdit?sectionId:null}')">${isEdit?'Guardar':'Crear'}</button>
+      <button class="btn-primary" onclick="saveCustomSection('${tabId}',${isEdit?`'${sectionId}'`:'null'})">${isEdit?'Guardar':'Crear'}</button>
     </div>`);
   setTimeout(()=>$('csn')&&$('csn').focus(),50);
 }
