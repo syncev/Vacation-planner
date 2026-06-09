@@ -114,7 +114,7 @@ h3{font-size:15px;font-weight:500;margin-bottom:.75rem}
 .admin-wrap{max-width:680px;margin:0 auto;padding:2rem 1rem}
 .admin-trip-card{background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:.75rem;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
 .admin-trip-card .trip-hash{font-size:11px;color:var(--color-text-tertiary);font-family:monospace;margin-top:3px}
-#undo-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:#1c1c1a;color:#f0ede8;padding:.625rem 1.125rem;border-radius:20px;display:none;align-items:center;gap:.875rem;box-shadow:0 4px 20px rgba(0,0,0,.35);z-index:2000;font-size:13px;white-space:nowrap;animation:toastIn .2s ease}
+#undo-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:#1c1c1a;color:#f0ede8;padding:.625rem 1.125rem;border-radius:20px;display:none;align-items:center;gap:.875rem;box-shadow:0 4px 20px rgba(0,0,0,.35);z-index:4000;font-size:13px;white-space:nowrap;animation:toastIn .2s ease}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 @media(prefers-color-scheme:dark){#undo-toast{background:#f0ede8;color:#1c1c1a}#undo-btn{color:#1D9E75}}
 </style>
@@ -195,13 +195,13 @@ function getSelected(arr){return arr?arr.find(i=>i.checked)||null:null;}
 function nextId(arr){return Math.max(0,...arr.map(i=>i.id))+1;}
 
 let _undoTimer=null;
-function showUndoToast(label,restoreFn){
+function showUndoToast(label,restoreFn,persistent=false){
   clearTimeout(_undoTimer);
   $('undo-label').textContent=label;
   const t=$('undo-toast');t.style.display='flex';
   t.style.animation='none';void t.offsetWidth;t.style.animation='toastIn .2s ease';
   $('undo-btn').onclick=()=>{clearTimeout(_undoTimer);restoreFn();hideUndoToast();};
-  _undoTimer=setTimeout(hideUndoToast,5000);
+  if(!persistent)_undoTimer=setTimeout(hideUndoToast,5000);
 }
 function hideUndoToast(){$('undo-toast').style.display='none';}
 
@@ -972,7 +972,7 @@ function deleteAdminTrip(tripId){
       showUndoToast(`"${nombre}" eliminado`,()=>{
         db.collection('trips').doc(tripId).set(tripData)
           .then(()=>renderAdminPanel());
-      });
+      },true);
     })
     .catch(err=>console.error('Error al borrar:',err));
 }
