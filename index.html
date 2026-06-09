@@ -41,7 +41,7 @@ body::-webkit-scrollbar{display:none}
 .app-wrapper{max-width:720px;margin:0 auto;padding:1.5rem 1rem}
 .app-title{font-size:22px;font-weight:500;margin-bottom:1.5rem}
 .app-title span{font-size:14px;color:var(--color-text-secondary);font-weight:400;margin-left:8px}
-.tabs{display:flex;gap:4px;border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:1.5rem;overflow-x:auto;padding-bottom:0;scrollbar-width:none;align-items:flex-end}
+.tabs{display:flex;gap:4px;border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:1.5rem;overflow-x:auto;padding-bottom:0;scrollbar-width:none;align-items:flex-end;width:fit-content;max-width:100%}
 .tabs::-webkit-scrollbar{display:none}
 .tab-add{padding:6px 10px;border:none;background:none;cursor:pointer;color:var(--color-text-tertiary);font-size:16px;line-height:1;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:6px 6px 0 0;font-family:var(--font-sans)}
 .tab-add:hover{color:var(--color-text-primary);background:var(--color-background-secondary)}
@@ -172,7 +172,8 @@ const DEFAULT = {
   customTabs: [],
   skiVisible: true,
   skiName: 'Ski & Equipo',
-  skiDesc: ''
+  skiDesc: '',
+  tabNotes: {}
 };
 
 function migrateState(s){
@@ -183,13 +184,15 @@ function migrateState(s){
   if(!s.vuelos||Array.isArray(s.vuelos))s.vuelos={};
   if(!s.tripName)s.tripName='Mi Viaje';
   if(s.tripDate===undefined)s.tripDate='';
-  if(s.ski&&!s.ski.dias)s.ski.dias=[];
+  if(!s.ski)s.ski={dias:[],pase:[],equipo:[],ropa:[]};
+  else{if(!s.ski.dias)s.ski.dias=[];if(!s.ski.pase)s.ski.pase=[];if(!s.ski.equipo)s.ski.equipo=[];if(!s.ski.ropa)s.ski.ropa=[];}
   if(s.actividades)s.actividades=s.actividades.map(a=>({fecha:'',fechaFin:'',...a}));
   if(!s.customTabs)s.customTabs=[];
   else s.customTabs=s.customTabs.map(ct=>({fechas:[],...ct}));
   if(s.skiVisible===undefined)s.skiVisible=true;
   if(!s.skiName)s.skiName='Ski & Equipo';
   if(s.skiDesc===undefined)s.skiDesc='';
+  if(!s.tabNotes)s.tabNotes={};
   return s;
 }
 
@@ -635,11 +638,11 @@ function renderVuelos(){
       <button class="add-btn" onclick="addVuelo(${p.id})"><i class="ti ti-plus"></i> Agregar opción de vuelo</button>
     </div>`;
   });
-  $('panel-vuelos').innerHTML=`<h2>Vuelos</h2>${state.personas.length===0?'<p style="color:var(--color-text-secondary)">Agregá viajeros desde el Resumen para gestionar vuelos.</p>':sections.join('')}`;
+  $('panel-vuelos').innerHTML=`<h2>Vuelos ${tabNoteHtml('vuelos')}</h2>${state.personas.length===0?'<p style="color:var(--color-text-secondary)">Agregá viajeros desde el Resumen para gestionar vuelos.</p>':sections.join('')}`;
 }
 
 function renderHospedaje(){
-  $('panel-hospedaje').innerHTML=`<h2>Hospedaje <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">14–18 ago · 4 noches</span></h2>
+  $('panel-hospedaje').innerHTML=`<h2>Hospedaje ${tabNoteHtml('hospedaje')}</h2>
   ${state.hospedaje.map(h=>`<div class="card${h.checked?' done':''}"><div class="card-row">
     <div class="checkbox${h.checked?' checked':''}" onclick="toggleItem('hospedaje',${h.id})"></div>
     <div class="card-body"><div class="item-name">${h.nombre}${h.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
@@ -698,7 +701,7 @@ function renderSki(){
 }
 
 function renderActividades(){
-  $('panel-actividades').innerHTML=`<h2>Actividades <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">Dom 16 ago</span></h2>
+  $('panel-actividades').innerHTML=`<h2>Actividades ${tabNoteHtml('actividades')}</h2>
   ${state.actividades.map(a=>`<div class="card${a.checked?' done':''}"><div class="card-row">
     <div class="checkbox${a.checked?' checked':''}" onclick="toggleItem('actividades',${a.id})"></div>
     <div class="card-body"><div class="item-name">${a.nombre}${a.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
@@ -714,7 +717,7 @@ function renderActividades(){
 }
 
 function renderTraslados(){
-  $('panel-traslados').innerHTML=`<h2>Traslados</h2>
+  $('panel-traslados').innerHTML=`<h2>Traslados ${tabNoteHtml('traslados')}</h2>
   ${state.traslados.map(t=>`<div class="card${t.checked?' done':''}"><div class="card-row">
     <div class="checkbox${t.checked?' checked':''}" onclick="toggleItem('traslados',${t.id})"></div>
     <div class="card-body"><div class="item-name">${t.nombre}${t.checked?'<span class="selected-badge">Confirmado</span>':''}</div>
@@ -725,6 +728,27 @@ function renderTraslados(){
     <button class="btn-icon" onclick="deleteItem('traslados',${t.id})"><i class="ti ti-trash"></i></button></div>
   </div></div>`).join('')}
   <button class="add-btn" onclick="addTraslado()"><i class="ti ti-plus"></i> Agregar traslado</button>`;
+}
+
+function tabNoteHtml(tab){
+  const n=(state.tabNotes||{})[tab]||'';
+  if(n)return`<span style="font-size:12px;color:var(--color-text-secondary);font-weight:400;cursor:pointer" onclick="editTabNote('${tab}')">${n}</span>`;
+  return`<span style="font-size:12px;color:var(--color-text-tertiary);font-weight:400;cursor:pointer" onclick="editTabNote('${tab}')">Nota...</span>`;
+}
+function editTabNote(tab){
+  const cur=(state.tabNotes||{})[tab]||'';
+  openModal(`<h3>Nota de sección</h3>
+    <div class="form-group"><input id="tbn" value="${cur.replace(/"/g,'&quot;')}" placeholder="Nota..."></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveTabNote('${tab}')">Guardar</button>
+    </div>`);
+  setTimeout(()=>$('tbn')&&$('tbn').focus(),50);
+}
+function saveTabNote(tab){
+  if(!state.tabNotes)state.tabNotes={};
+  state.tabNotes[tab]=($('tbn').value||'').trim();
+  saveState();closeModal();renderPanel(tab);
 }
 
 function renderPanel(id){
@@ -892,6 +916,7 @@ function saveTraslado(id){
 function newId(){return(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);}
 
 function renderTabs(){
+  const activeId=document.querySelector('.tab.active')?.dataset.tab;
   $('tabs').querySelectorAll('[data-custom]').forEach(b=>b.remove());
   document.querySelectorAll('.panel[data-custom]').forEach(p=>p.remove());
   const wrapper=document.querySelector('.app-wrapper');
@@ -899,6 +924,7 @@ function renderTabs(){
   (state.customTabs||[]).forEach(ct=>{
     const btn=document.createElement('button');
     btn.className='tab';btn.dataset.tab=ct.id;btn.dataset.custom='1';
+    if(activeId===ct.id)btn.classList.add('active');
     btn.innerHTML=`<i class="ti ti-grid-dots"></i> ${ct.nombre}`;
     $('tabs').insertBefore(btn,addBtn);
     const panel=document.createElement('div');
