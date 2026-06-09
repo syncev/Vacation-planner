@@ -455,20 +455,46 @@ function copyTripUrl(){
 
 function calcResumen(){
   const n=Math.max(state.personas.length,1);
-  const hosp=getSelected(state.hospedaje);
-  const hospPP=hosp?Math.round(hosp.precioTotal/n):0;
-  const pase=getSelected(state.ski.pase);
-  const equipo=getSelected(state.ski.equipo);
-  const ropa=getSelected(state.ski.ropa);
-  const skiPorDia=(pase?.precio||0)+(equipo?.precio||0)+(ropa?.precio||0);
+
+  const hospChecked=state.hospedaje.filter(h=>h.checked);
+  const hospTotal=hospChecked.reduce((s,h)=>s+(h.precioTotal||0),0);
+  const hospPP=hospChecked.length>0?Math.round(hospTotal/n):0;
+
+  const pases=(state.ski.pase||[]).filter(i=>i.checked);
+  const equipos=(state.ski.equipo||[]).filter(i=>i.checked);
+  const ropas=(state.ski.ropa||[]).filter(i=>i.checked);
+  const skiItems=[...pases,...equipos,...ropas];
+  const skiPorDia=skiItems.reduce((s,i)=>s+(i.precio||0),0);
   const skiDias=(state.ski.dias||[]).length;
   const skiPP=skiPorDia*Math.max(skiDias,1);
-  const act=getSelected(state.actividades);
+
+  const trasladosChecked=state.traslados.filter(t=>t.checked);
+  const trasladosPP=trasladosChecked.reduce((s,t)=>s+(t.precio||0),0);
+
+  const actChecked=state.actividades.filter(a=>a.checked);
+  const actPP=actChecked.reduce((s,a)=>s+(a.precio||0),0);
+
+  const customSummary=(state.customTabs||[]).map(ct=>{
+    const items=(ct.secciones||[]).flatMap(s=>(s.items||[]).filter(i=>i.checked));
+    const total=items.reduce((s,i)=>s+(i.precio||0),0);
+    return{id:ct.id,nombre:ct.nombre,items,total};
+  }).filter(ct=>ct.items.length>0);
+
   const personas=state.personas.map(p=>{
-    const vuelo=getSelected(state.vuelos[String(p.id)]||[]);
-    return{...p,vuelo,total:(vuelo?.precio||0)+hospPP+skiPP};
+    const vuelosChecked=(state.vuelos[String(p.id)]||[]).filter(v=>v.checked);
+    const vueloTotal=vuelosChecked.reduce((s,v)=>s+(v.precio||0),0);
+    const total=vueloTotal+hospPP+skiPP+trasladosPP+actPP;
+    const expenses=[
+      {label:'Vuelo',amount:vueloTotal},
+      {label:'Hospedaje',amount:hospPP},
+      {label:state.skiName||'Ski',amount:skiPP},
+      {label:'Traslados',amount:trasladosPP},
+      {label:'Actividades',amount:actPP},
+    ].filter(e=>e.amount>0).sort((a,b)=>b.amount-a.amount);
+    return{...p,vuelosChecked,vueloTotal,total,topExpense:expenses[0]||null};
   });
-  return{personas,hosp,hospPP,pase,equipo,ropa,skiPP,skiDias,act,n};
+
+  return{n,personas,hospChecked,hospTotal,hospPP,pases,equipos,ropas,skiItems,skiPorDia,skiPP,skiDias,trasladosChecked,trasladosPP,actChecked,actPP,customSummary};
 }
 
 function platformBadge(p){
@@ -538,7 +564,7 @@ function deletePersona(id){
 
 function renderResumen(){
   const r=calcResumen();
-  const confirmed=[r.hosp,r.pase,r.equipo,r.ropa].filter(Boolean).length+r.personas.filter(p=>p.vuelo).length;
+  const confirmed=[r.hospChecked.length>0,r.skiItems.length>0,r.trasladosChecked.length>0,r.actChecked.length>0].filter(Boolean).length+r.personas.filter(p=>p.vuelosChecked.length>0).length;
   const total=4+r.personas.length;
   const pct=total>0?Math.round(confirmed/total*100):0;
   const it=buildItinerary();
@@ -575,29 +601,45 @@ ${renderPersonas()}
 <div class="summary-grid">
   ${r.personas.map(p=>`<div class="metric-card">
     <div class="metric-label">Total ${p.nombre}</div>
-    <div class="metric-value">$${fmt(p.total)}</div>
-    <div class="metric-sub">${p.vuelo?'Vuelo: $'+fmt(p.vuelo.precio):'Vuelo sin confirmar'}${p.origen?' · '+p.origen:''}</div>
+    <div class="metric-value">${p.total>0?'$'+fmt(p.total):'—'}</div>
+    <div class="metric-sub">${p.topExpense?p.topExpense.label+': $'+fmt(p.topExpense.amount):'Sin gastos confirmados'}${p.origen?' · '+p.origen:''}</div>
   </div>`).join('')}
-  <div class="metric-card">
-    <div class="metric-label">Hospedaje por persona</div>
-    <div class="metric-value">${r.hosp?'$'+fmt(r.hospPP):'—'}</div>
-    <div class="metric-sub">${r.hosp?r.hosp.nombre+(r.n>1?' · entre '+r.n:''):'Sin seleccionar'}</div>
-  </div>
-  <div class="metric-card">
-    <div class="metric-label">Ski${r.skiDias>1?' ('+r.skiDias+' días)':''} por persona</div>
+  ${r.personas.some(p=>p.vuelosChecked.length>0)?`<div class="metric-card">
+    <div class="metric-label">Vuelos</div>
+    ${r.personas.filter(p=>p.vuelosChecked.length>0).map(p=>p.vuelosChecked.map(v=>`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:6px"><span style="font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>${p.nombre}</b> · ${v.nombre}</span><span style="font-size:11px;font-weight:500;flex-shrink:0">$${fmt(v.precio||0)}</span></div>`).join('')).join('')}
+  </div>`:''}
+  ${r.hospChecked.length>0?`<div class="metric-card">
+    <div class="metric-label">Hospedaje (p/p)</div>
+    <div class="metric-value">$${fmt(r.hospPP)}</div>
+    <div class="metric-sub">${r.hospChecked.map(h=>h.fechas||h.nombre).join(' | ')}</div>
+  </div>`:''}
+  ${r.trasladosChecked.length>0?`<div class="metric-card">
+    <div class="metric-label">Traslados (p/p)</div>
+    <div class="metric-value">$${fmt(r.trasladosPP)}</div>
+    <div class="metric-sub">${r.trasladosChecked.length>2?r.trasladosChecked.length+' traslados':r.trasladosChecked.map(t=>t.nombre).join(', ')}</div>
+  </div>`:''}
+  ${r.skiItems.length>0?`<div class="metric-card">
+    <div class="metric-label">${state.skiName||'Ski & Equipo'}${r.skiDias>1?' ('+r.skiDias+' días)':''} p/p</div>
     <div class="metric-value">$${fmt(r.skiPP)}</div>
-    <div class="metric-sub">Pase + equipo + ropa</div>
-  </div>
+    <div class="metric-sub">${r.skiItems.map(i=>i.nombre).join(' + ')}</div>
+  </div>`:''}
+  ${r.customSummary.map(ct=>`<div class="metric-card">
+    <div class="metric-label">${ct.nombre}</div>
+    <div class="metric-value">$${fmt(ct.total)}</div>
+    <div class="metric-sub">${ct.items.length>2?ct.items.length+' ítems':ct.items.map(i=>i.nombre).join(' + ')}</div>
+  </div>`).join('')}
 </div>
 <div class="divider"></div>
 <h3>Opciones seleccionadas</h3>
 <div style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.25rem">
-${r.personas.map(p=>lineItem('Vuelo '+p.nombre,p.vuelo?p.vuelo.nombre:'Sin seleccionar',p.vuelo?p.vuelo.precio:null,'vuelos')).join('')}
-${lineItem('Hospedaje (p/p)',r.hosp?r.hosp.nombre:'Sin seleccionar',r.hosp?r.hospPP:null,'hospedaje')}
-${lineItem('Pase ski',r.pase?r.pase.nombre:'Sin seleccionar',r.pase?r.pase.precio:null,'ski')}
-${lineItem('Equipo ski',r.equipo?r.equipo.nombre:'Sin seleccionar',r.equipo?r.equipo.precio:null,'ski')}
-${lineItem('Ropa de nieve',r.ropa?r.ropa.nombre:'Sin seleccionar',r.ropa?r.ropa.precio:null,'ski')}
-${lineItem('Actividad día 3',r.act?r.act.nombre:'Sin seleccionar',r.act&&r.act.precio?r.act.precio:null,'actividades')}
+${r.personas.map(p=>p.vuelosChecked.length===0?lineItem('Vuelo '+p.nombre,'Sin seleccionar',null,'vuelos'):p.vuelosChecked.map(v=>lineItem('Vuelo '+p.nombre,v.nombre,v.precio,'vuelos')).join('')).join('')}
+${r.hospChecked.length===0?lineItem('Hospedaje (p/p)','Sin seleccionar',null,'hospedaje'):r.hospChecked.map(h=>lineItem('Hospedaje (p/p)',h.nombre,Math.round(h.precioTotal/r.n),'hospedaje')).join('')}
+${r.pases.length===0?lineItem('Pase ski','Sin seleccionar',null,'ski'):r.pases.map(i=>lineItem('Pase ski',i.nombre,i.precio,'ski')).join('')}
+${r.equipos.length===0?lineItem('Equipo ski','Sin seleccionar',null,'ski'):r.equipos.map(i=>lineItem('Equipo ski',i.nombre,i.precio,'ski')).join('')}
+${r.ropas.length===0?lineItem('Ropa de nieve','Sin seleccionar',null,'ski'):r.ropas.map(i=>lineItem('Ropa de nieve',i.nombre,i.precio,'ski')).join('')}
+${r.trasladosChecked.length===0?lineItem('Traslados','Sin seleccionar',null,'traslados'):r.trasladosChecked.map(t=>lineItem(t.nombre,t.tipo||'',t.precio,'traslados')).join('')}
+${r.actChecked.length===0?lineItem('Actividades','Sin seleccionar',null,'actividades'):r.actChecked.map(a=>lineItem(a.nombre,a.tipo||'',a.precio||null,'actividades')).join('')}
+${r.customSummary.map(ct=>ct.items.map(i=>lineItem(ct.nombre,i.nombre,i.precio||null,ct.id)).join('')).join('')}
 </div>
 <div class="divider"></div>
 <h3>Itinerario</h3>
@@ -676,10 +718,10 @@ function skiSection(key,title){
 }
 
 function renderSki(){
-  const pase=getSelected(state.ski.pase);
-  const equipo=getSelected(state.ski.equipo);
-  const ropa=getSelected(state.ski.ropa);
-  const total=(pase?.precio||0)+(equipo?.precio||0)+(ropa?.precio||0);
+  const pases=(state.ski.pase||[]).filter(i=>i.checked);
+  const equipos=(state.ski.equipo||[]).filter(i=>i.checked);
+  const ropas=(state.ski.ropa||[]).filter(i=>i.checked);
+  const total=[...pases,...equipos,...ropas].reduce((s,i)=>s+(i.precio||0),0);
   const skiDiasCnt=(state.ski.dias||[]).length;
   $('panel-ski').innerHTML=`<div class="section-header">
     <div>
@@ -769,11 +811,11 @@ $('tabs').addEventListener('click',e=>{
 
 function toggleVuelo(personaId,id){
   const k=String(personaId);
-  state.vuelos[k]=(state.vuelos[k]||[]).map(v=>({...v,checked:v.id===id?!v.checked:false}));
+  state.vuelos[k]=(state.vuelos[k]||[]).map(v=>({...v,checked:v.id===id?!v.checked:v.checked}));
   saveState();renderVuelos();renderResumen();
 }
-function toggleItem(col,id){state[col]=state[col].map(i=>({...i,checked:i.id===id?!i.checked:false}));saveState();renderPanel(col);renderResumen();}
-function toggleSki(key,id){state.ski[key]=state.ski[key].map(i=>({...i,checked:i.id===id?!i.checked:false}));saveState();renderSki();renderResumen();}
+function toggleItem(col,id){state[col]=state[col].map(i=>({...i,checked:i.id===id?!i.checked:i.checked}));saveState();renderPanel(col);renderResumen();}
+function toggleSki(key,id){state.ski[key]=state.ski[key].map(i=>({...i,checked:i.id===id?!i.checked:i.checked}));saveState();renderSki();renderResumen();}
 
 $('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay'))closeModal();});
 
