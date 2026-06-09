@@ -105,6 +105,10 @@ h3{font-size:15px;font-weight:500;margin-bottom:.75rem}
 .day-note{font-size:12px;color:var(--color-text-secondary);margin-top:4px}
 .traslado-pending{font-size:12px;color:var(--color-text-tertiary);font-style:italic}
 @media(max-width:480px){.summary-grid{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}}
+.cal-day{cursor:pointer;padding:6px 2px;border-radius:6px;font-size:13px;text-align:center;color:var(--color-text-primary);transition:background .1s}
+.cal-day:hover{background:var(--color-background-tertiary)}
+.cal-day.sel{background:#1D9E75;color:white;font-weight:600}
+.cal-day.sel:hover{background:#18876A}
 </style>
 </head>
 <body>
@@ -262,10 +266,76 @@ function buildItinerary(){
   return{byDate,sortedDates,undatedSki,undatedAct};
 }
 
+let _calSelected=new Set();
+const CAL_MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const CAL_DAYS=['Lu','Ma','Mi','Ju','Vi','Sá','Do'];
+
+function renderCalMonth(year,month){
+  const firstDow=(new Date(year,month,1).getDay()+6)%7;
+  const total=new Date(year,month+1,0).getDate();
+  const cells=[];
+  for(let i=0;i<firstDow;i++)cells.push(`<div></div>`);
+  for(let d=1;d<=total;d++){
+    const iso=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const sel=_calSelected.has(iso);
+    cells.push(`<div class="cal-day${sel?' sel':''}" id="cal-${iso}" onclick="toggleCalDay('${iso}')">${d}</div>`);
+  }
+  return`<div style="flex:1;min-width:190px">
+    <div style="text-align:center;font-size:12px;font-weight:500;margin-bottom:.5rem;color:var(--color-text-secondary)">${CAL_MONTHS[month]} ${year}</div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">
+      ${CAL_DAYS.map(d=>`<div style="font-size:10px;color:var(--color-text-tertiary);text-align:center;padding:3px 0">${d}</div>`).join('')}
+      ${cells.join('')}
+    </div>
+  </div>`;
+}
+
+function toggleCalDay(iso){
+  if(_calSelected.has(iso)){_calSelected.delete(iso);}
+  else{_calSelected.add(iso);}
+  const el=document.getElementById('cal-'+iso);
+  if(el){el.classList.toggle('sel',_calSelected.has(iso));}
+  updateCalCount();
+}
+
+function updateCalCount(){
+  const el=document.getElementById('cal-count');
+  if(el){const n=_calSelected.size;el.textContent=n===0?'Ningún día seleccionado':n===1?'1 día seleccionado':n+' días seleccionados';}
+}
+
+function openSkiCalendar(){
+  _calSelected=new Set((state.ski.dias||[]).map(d=>d.fecha).filter(Boolean));
+  const now=new Date();
+  const y1=now.getFullYear(),m1=now.getMonth();
+  const y2=m1===11?y1+1:y1,m2=m1===11?0:m1+1;
+  openModal(`<h3>Días de ski</h3>
+    <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:.875rem">Tocá los días para seleccionarlos o deseleccionarlos.</p>
+    <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:.875rem">
+      ${renderCalMonth(y1,m1)}
+      ${renderCalMonth(y2,m2)}
+    </div>
+    <div id="cal-count" style="font-size:12px;font-weight:500;color:#1D9E75;margin-bottom:.25rem">${_calSelected.size===0?'Ningún día seleccionado':_calSelected.size===1?'1 día seleccionado':_calSelected.size+' días seleccionados'}</div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveSkiCalendar()">Guardar</button>
+    </div>`);
+}
+
+function saveSkiCalendar(){
+  const existingByDate={};
+  (state.ski.dias||[]).forEach(d=>{if(d.fecha)existingByDate[d.fecha]=d;});
+  let maxId=Math.max(0,...(state.ski.dias||[]).map(d=>d.id));
+  const newDias=[];
+  Array.from(_calSelected).sort().forEach(fecha=>{
+    newDias.push(existingByDate[fecha]||{id:++maxId,fecha,notas:''});
+  });
+  state.ski.dias=newDias;
+  saveState();closeModal();renderSki();renderResumen();
+}
+
 function renderSkiDias(){
   const dias=state.ski.dias||[];
   return`<div style="margin-bottom:1.5rem">
-    <div class="section-header"><h3>Días de ski</h3><button class="btn-icon" onclick="addSkiDia()" title="Agregar día" style="font-size:18px"><i class="ti ti-plus"></i></button></div>
+    <div class="section-header"><h3>Días de ski</h3><button class="btn-icon" onclick="openSkiCalendar()" title="Elegir días" style="font-size:18px"><i class="ti ti-calendar"></i></button></div>
     ${dias.length===0?'<p style="font-size:12px;color:var(--color-text-tertiary);padding:.5rem 0">Sin días planificados. Agregá uno para que aparezca en el itinerario.</p>':''}
     ${dias.map(d=>`<div class="card"><div class="card-row">
       <i class="ti ti-mountain" style="font-size:18px;color:var(--color-text-secondary);flex-shrink:0;margin-top:2px"></i>
@@ -291,7 +361,7 @@ function formSkiDia(d){
       <button class="btn-primary" onclick="saveSkiDia(${isEdit?d.id:0})">Guardar</button>
     </div>`);
 }
-function addSkiDia(){formSkiDia(null);}
+function addSkiDia(){openSkiCalendar();}
 function editSkiDia(id){formSkiDia((state.ski.dias||[]).find(d=>d.id===id));}
 function saveSkiDia(id){
   if(!state.ski.dias)state.ski.dias=[];
