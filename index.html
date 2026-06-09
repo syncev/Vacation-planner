@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bariloche 2026 — Planificador</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.4.0/dist/tabler-icons.min.css">
+<style>
+:root {
+  --color-background-primary: #ffffff;
+  --color-background-secondary: #f5f5f4;
+  --color-background-tertiary: #eeede9;
+  --color-text-primary: #1a1a18;
+  --color-text-secondary: #6b6b68;
+  --color-text-tertiary: #9b9b98;
+  --color-border-tertiary: rgba(0,0,0,0.12);
+  --color-border-secondary: rgba(0,0,0,0.22);
+  --color-border-primary: rgba(0,0,0,0.35);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-serif: Georgia, serif;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --border-radius-xl: 16px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background-primary: #1c1c1a;
+    --color-background-secondary: #252523;
+    --color-background-tertiary: #2e2e2b;
+    --color-text-primary: #f0ede8;
+    --color-text-secondary: #a8a8a4;
+    --color-text-tertiary: #6b6b68;
+    --color-border-tertiary: rgba(255,255,255,0.10);
+    --color-border-secondary: rgba(255,255,255,0.18);
+    --color-border-primary: rgba(255,255,255,0.28);
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);background:var(--color-background-tertiary);color:var(--color-text-primary);font-size:14px;min-height:100vh}
+.app-wrapper{max-width:720px;margin:0 auto;padding:1.5rem 1rem}
+.app-title{font-size:22px;font-weight:500;margin-bottom:1.5rem}
+.app-title span{font-size:14px;color:var(--color-text-secondary);font-weight:400;margin-left:8px}
+.tabs{display:flex;gap:4px;border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:1.5rem;overflow-x:auto;padding-bottom:0}
+.tab{padding:8px 14px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--color-text-secondary);white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px;font-family:var(--font-sans)}
+.tab.active{color:var(--color-text-primary);border-bottom-color:var(--color-text-primary);font-weight:500}
+.tab:hover:not(.active){color:var(--color-text-primary);background:var(--color-background-secondary);border-radius:6px 6px 0 0}
+.panel{display:none}.panel.active{display:block}
+.card{background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:.75rem}
+.card.done{opacity:.6}
+.card.done .item-name{text-decoration:line-through;color:var(--color-text-secondary)}
+.card-row{display:flex;align-items:flex-start;gap:12px}
+.card-body{flex:1;min-width:0}
+.item-name{font-weight:500;font-size:14px;margin-bottom:4px;word-break:break-word}
+.item-meta{font-size:12px;color:var(--color-text-secondary);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:400}
+.badge-blue{background:#E6F1FB;color:#0C447C}
+.badge-green{background:#EAF3DE;color:#27500A}
+.badge-amber{background:#FAEEDA;color:#633806}
+.badge-gray{background:#F1EFE8;color:#444441}
+.badge-teal{background:#E1F5EE;color:#085041}
+.price-tag{font-size:13px;font-weight:500;color:var(--color-text-primary);white-space:nowrap}
+.card-actions{display:flex;gap:4px;flex-shrink:0;margin-top:2px}
+.btn-icon{background:none;border:none;cursor:pointer;padding:4px;border-radius:6px;color:var(--color-text-secondary);line-height:1;font-size:16px}
+.btn-icon:hover{background:var(--color-background-secondary);color:var(--color-text-primary)}
+.checkbox{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--color-border-secondary);background:var(--color-background-primary);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:2px;transition:all .15s}
+.checkbox.checked{background:#1D9E75;border-color:#1D9E75}
+.checkbox.checked::after{content:'';display:block;width:5px;height:9px;border:2px solid white;border-top:none;border-left:none;transform:rotate(45deg) translateY(-1px)}
+.add-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;border:.5px dashed var(--color-border-secondary);border-radius:var(--border-radius-md);background:none;cursor:pointer;color:var(--color-text-secondary);font-size:13px;font-family:var(--font-sans);width:100%;justify-content:center;margin-top:.5rem}
+.add-btn:hover{background:var(--color-background-secondary);color:var(--color-text-primary)}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100;padding:1rem}
+.modal{background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1.5rem;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
+.modal h3{margin-bottom:1rem;font-size:15px;font-weight:500}
+.form-group{margin-bottom:.75rem}
+.form-group label{display:block;font-size:12px;color:var(--color-text-secondary);margin-bottom:4px;font-weight:500}
+.form-group input,.form-group select,.form-group textarea{width:100%;font-family:var(--font-sans);font-size:13px;padding:7px 10px;border:.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);outline:none}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--color-border-primary);box-shadow:0 0 0 2px rgba(0,0,0,.06)}
+.form-group textarea{resize:vertical;min-height:60px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:1rem;padding-top:1rem;border-top:.5px solid var(--color-border-tertiary)}
+.btn-primary{background:var(--color-text-primary);color:var(--color-background-primary);border:none;padding:8px 16px;border-radius:var(--border-radius-md);cursor:pointer;font-size:13px;font-family:var(--font-sans)}
+.btn-primary:hover{opacity:.85}
+.btn-secondary{background:none;border:.5px solid var(--color-border-secondary);padding:8px 16px;border-radius:var(--border-radius-md);cursor:pointer;font-size:13px;font-family:var(--font-sans);color:var(--color-text-primary)}
+.btn-secondary:hover{background:var(--color-background-secondary)}
+.btn-danger{background:none;border:.5px solid #E24B4A;color:#E24B4A;padding:8px 16px;border-radius:var(--border-radius-md);cursor:pointer;font-size:13px;font-family:var(--font-sans)}
+.btn-danger:hover{background:#FCEBEB}
+h2{font-size:18px;font-weight:500;margin-bottom:1rem}
+h3{font-size:15px;font-weight:500;margin-bottom:.75rem}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
+.summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1.5rem}
+.metric-card{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.875rem 1rem}
+.metric-label{font-size:11px;color:var(--color-text-secondary);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.metric-value{font-size:22px;font-weight:500}
+.metric-sub{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+.progress-bar{height:4px;background:var(--color-background-secondary);border-radius:2px;margin:.5rem 0;overflow:hidden}
+.progress-fill{height:100%;background:#1D9E75;border-radius:2px;transition:width .3s}
+.divider{height:.5px;background:var(--color-border-tertiary);margin:1.25rem 0}
+.link-text{color:#185FA5;font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:3px}
+.link-text:hover{text-decoration:underline}
+.selected-badge{font-size:10px;padding:2px 7px;border-radius:20px;background:#E1F5EE;color:#085041;border:.5px solid #9FE1CB;font-weight:500;margin-left:6px}
+.itinerary-day{border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:.75rem}
+.itinerary-day-header{display:flex;align-items:center;gap:10px;margin-bottom:.5rem;flex-wrap:wrap}
+.day-label{font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:var(--color-background-secondary);color:var(--color-text-secondary);white-space:nowrap}
+.day-activity{font-size:14px;font-weight:500}
+.day-note{font-size:12px;color:var(--color-text-secondary);margin-top:4px}
+.traslado-pending{font-size:12px;color:var(--color-text-tertiary);font-style:italic}
+@media(max-width:480px){.summary-grid{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app-wrapper">
+  <div class="app-title">Bariloche 2026 <span>14–18 agosto</span></div>
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-tab="resumen"><i class="ti ti-layout-dashboard"></i> Resumen</button>
+    <button class="tab" data-tab="vuelos"><i class="ti ti-plane"></i> Vuelos</button>
+    <button class="tab" data-tab="hospedaje"><i class="ti ti-home"></i> Hospedaje</button>
+    <button class="tab" data-tab="ski"><i class="ti ti-mountain"></i> Ski & Equipo</button>
+    <button class="tab" data-tab="actividades"><i class="ti ti-map"></i> Actividades</button>
+    <button class="tab" data-tab="traslados"><i class="ti ti-car"></i> Traslados</button>
+  </div>
+  <div id="panel-resumen" class="panel active"></div>
+  <div id="panel-vuelos" class="panel"></div>
+  <div id="panel-hospedaje" class="panel"></div>
+  <div id="panel-ski" class="panel"></div>
+  <div id="panel-actividades" class="panel"></div>
+  <div id="panel-traslados" class="panel"></div>
+</div>
+
+<div id="modal-overlay" class="modal-overlay" style="display:none">
+  <div class="modal" id="modal-box"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => n ? Math.round(n).toLocaleString('es-AR') : '—';
+
+const DEFAULT = {
+  vuelos: {
+    santi: [
+      {id:1,nombre:'Opción 1 — MDZ→BRC→MDZ',aerolinea:'',fechaIda:'13-ago',fechaVuelta:'18-ago',precio:350000,checked:false,link:''},
+      {id:2,nombre:'Opción 2',aerolinea:'',fechaIda:'',fechaVuelta:'',precio:0,checked:false,link:''},
+    ],
+    amigo: [
+      {id:1,nombre:'Opción 1 — BUE→BRC→BUE',aerolinea:'',fechaIda:'14-ago',fechaVuelta:'18-ago',precio:260000,checked:false,link:''},
+      {id:2,nombre:'Opción 2',aerolinea:'',fechaIda:'',fechaVuelta:'',precio:0,checked:false,link:''},
+    ]
+  },
+  hospedaje: [
+    {id:1,nombre:'Villa los Coihues',plataforma:'Airbnb',fechas:'14–18 ago',precioTotal:200000,checked:false,link:'https://www.airbnb.com/rooms/28982267?check_in=2026-08-14&check_out=2026-08-18&guests=1&adults=2',notas:''},
+    {id:2,nombre:'Villa los Coihues',plataforma:'Booking',fechas:'14–18 ago',precioTotal:200000,checked:false,link:'https://www.booking.com/Share-M77bux',notas:''},
+    {id:3,nombre:'Bariloche Sur',plataforma:'Airbnb',fechas:'14–18 ago',precioTotal:200000,checked:false,link:'https://www.airbnb.com/rooms/1283376091846965155?check_in=2026-08-14&check_out=2026-08-18&guests=1&adults=2',notas:''},
+    {id:4,nombre:'Airbnb opción 3',plataforma:'Airbnb',fechas:'14–18 ago',precioTotal:200000,checked:false,link:'https://www.airbnb.com/rooms/1633645829947158429?check_in=2026-08-14&check_out=2026-08-18&guests=1&adults=2',notas:''},
+    {id:5,nombre:'Airbnb opción 4 (centro)',plataforma:'Airbnb',fechas:'14–18 ago',precioTotal:200000,checked:false,link:'https://www.airbnb.com/rooms/1127370243374108079?check_in=2026-08-14&check_out=2026-08-18&guests=1&adults=2',notas:''},
+    {id:6,nombre:'Hotel Booking 1',plataforma:'Booking',fechas:'14–18 ago',precioTotal:0,checked:false,link:'https://www.booking.com/Share-GIE97nr',notas:''},
+    {id:7,nombre:'Hotel Booking 2',plataforma:'Booking',fechas:'14–18 ago',precioTotal:0,checked:false,link:'https://www.booking.com/Share-xs9Mcxv',notas:''},
+    {id:8,nombre:'Hospedaje Penthouse 1004 — hab. privada',plataforma:'Hostelworld',fechas:'6–10 ago (ref)',precioTotal:411600,checked:false,link:'https://www.spanish.hostelworld.com/pwa/hosteldetails.php/Hospedaje-Penthouse-1004/Bariloche/59459',notas:'Habitación privada matrimonial'},
+    {id:9,nombre:'Moving Hostel — 2 camas privadas',plataforma:'Hostelworld',fechas:'6–10 ago (ref)',precioTotal:387200,checked:false,link:'https://www.spanish.hostelworld.com/pwa/hosteldetails.php/Moving-Hostel-Travel-Bar/Bariloche/78949',notas:'Básico, baño compartido'},
+    {id:10,nombre:'Hostel Achalay — 2 camas privadas',plataforma:'Hostelworld',fechas:'6–10 ago (ref)',precioTotal:336000,checked:false,link:'https://www.spanish.hostelworld.com/pwa/hosteldetails.php/Hostel-Achalay/Bariloche/8690',notas:'Baño compartido'},
+    {id:11,nombre:'Villa Catedral — Airbnb AR',plataforma:'Airbnb AR',fechas:'ref jul-ago',precioTotal:400,checked:false,link:'https://www.airbnb.com.ar/rooms/17886055',notas:'Precio en USD'},
+  ],
+  ski: {
+    pase: [{id:1,nombre:'Pase Cerro Catedral',descripcion:'1 día, adulto',precio:160000,checked:false,link:'https://catedralaltapatagonia.com',notas:''}],
+    equipo: [
+      {id:1,nombre:'Epic Bariloche',descripcion:'Standard diario — esquís + botas + bastones',precio:52000,checked:false,link:'https://www.epicbariloche.com.ar/productos/alquiler-standard-diario1/',notas:''},
+      {id:2,nombre:'Nieve Austral',descripcion:'Standard diario',precio:53500,checked:false,link:'https://nieveaustral.com.ar/rental/',notas:''},
+      {id:3,nombre:'Travesía Catedral',descripcion:'Standard diario',precio:55000,checked:false,link:'https://travesiacatedral.com.ar/quote',notas:''},
+      {id:4,nombre:'Despegar (actividad)',descripcion:'Equipo ski/snowboard',precio:0,checked:false,link:'https://www.despegar.com.ar/actividades/d-PAM_BRC_33750/',notas:'Precio a consultar'},
+    ],
+    ropa: [
+      {id:1,nombre:'Despegar (actividad)',descripcion:'Conjunto completo + casco + antiparras',precio:65000,checked:false,link:'https://www.despegar.com.ar/actividades/d-PAM_BRC_62473/',notas:''},
+      {id:2,nombre:'Epic Bariloche',descripcion:'Buzos / ropa nieve hombre',precio:0,checked:false,link:'https://www.epicbariloche.com.ar/invierno/hombre/buzos1/',notas:'A consultar'},
+      {id:3,nombre:'Bariloche Travel',descripcion:'Ropa de nieve completa',precio:0,checked:false,link:'https://www.bariloche.travel/producto/alquiler-ropa-de-nieve/',notas:'A consultar'},
+      {id:4,nombre:'AlquilerRopaDeSkiAR',descripcion:'Ropa ski',precio:0,checked:false,link:'https://alquilerderopadeski.com.ar/producto/alquiler/',notas:'A consultar'},
+    ]
+  },
+  actividades: [
+    {id:1,nombre:'Cerro Catedral (2do día ski)',tipo:'Ski',precio:160000,duracion:'Día completo',checked:false,link:'',notas:'Mismo pase que día 1'},
+    {id:2,nombre:'Piedras Blancas — trineos / snow tubing',tipo:'Excursión',precio:0,duracion:'Medio día',checked:false,link:'http://www.piedrasblancasbariloche.com/actividades.html',notas:''},
+    {id:3,nombre:'Cerro Otto (teleférico)',tipo:'Excursión',precio:0,duracion:'Medio día',checked:false,link:'https://www.telefericobariloche.com.ar/en',notas:''},
+    {id:4,nombre:'Villa Llao Llao + Cerro Campanario',tipo:'Circuito',precio:0,duracion:'Día completo',checked:false,link:'https://cerrocampanario.com.ar/',notas:''},
+    {id:5,nombre:'Circuito Chico (lunes mañana)',tipo:'Circuito',precio:0,duracion:'Mañana',checked:false,link:'',notas:'Día 4 — mañana libre'},
+  ],
+  traslados: [
+    {id:1,nombre:'Aeropuerto BRC → Hospedaje',tipo:'Remis / Transfer',precio:0,checked:false,notas:'A cotizar en llegada'},
+    {id:2,nombre:'Hospedaje → Cerro Catedral',tipo:'Bus / Remis',precio:0,checked:false,notas:''},
+    {id:3,nombre:'Cerro Catedral → Hospedaje',tipo:'Bus / Remis',precio:0,checked:false,notas:''},
+    {id:4,nombre:'Excursión día 3',tipo:'Tour / Auto',precio:0,checked:false,notas:''},
+    {id:5,nombre:'Recorrido circuito día 4',tipo:'Tour / Auto',precio:0,checked:false,notas:''},
+    {id:6,nombre:'Hospedaje → Aeropuerto BRC',tipo:'Remis / Transfer',precio:0,checked:false,notas:''},
+  ]
+};
+
+let state;
+function loadState(){try{const s=localStorage.getItem('brc2026');if(s)return JSON.parse(s);}catch(e){}return JSON.parse(JSON.stringify(DEFAULT));}
+function saveState(){try{localStorage.setItem('brc2026',JSON.stringify(state));}catch(e){}}
+state = loadState();
+
+function getSelected(arr){return arr.find(i=>i.checked)||null}
+
+function calcResumen(){
+  const svuelo=getSelected(state.vuelos.santi);
+  const avuelo=getSelected(state.vuelos.amigo);
+  const hosp=getSelected(state.hospedaje);
+  const pase=getSelected(state.ski.pase);
+  const equipo=getSelected(state.ski.equipo);
+  const ropa=getSelected(state.ski.ropa);
+  const act=getSelected(state.actividades);
+  const hospPP=hosp?Math.round(hosp.precioTotal/2):0;
+  const paseP=pase?pase.precio:0;
+  const equipoP=equipo?equipo.precio:0;
+  const ropaP=ropa?ropa.precio:0;
+  return{svuelo,avuelo,hosp,pase,equipo,ropa,act,hospPP,paseP,equipoP,ropaP,
+    totalSanti:(svuelo?.precio||0)+hospPP+paseP+equipoP+ropaP,
+    totalAmigo:(avuelo?.precio||0)+hospPP+paseP+equipoP+ropaP};
+}
+
+function platformBadge(p){
+  const m={Airbnb:'badge-blue','Airbnb AR':'badge-blue',Booking:'badge-teal',Hostelworld:'badge-amber'};
+  return m[p]||'badge-gray';
+}
+
+function renderResumen(){
+  const r=calcResumen();
+  const confirmed=[r.svuelo||r.avuelo,r.hosp,r.pase,r.equipo,r.ropa].filter(Boolean).length;
+  const pct=Math.round(confirmed/5*100);
+  const itinerary=[
+    {fecha:'Jue 13 ago',act:'Llegada a Bariloche',note:'Confirmar hora de vuelo'},
+    {fecha:'Vie 14 ago',act:'Check-in hospedaje · explorar el centro',note:''},
+    {fecha:'Sáb 15 ago',act:'Ski en Cerro Catedral (día completo)',note:'Alquilar equipo + ropa con anticipación'},
+    {fecha:'Dom 16 ago',act:'2do día de ski o excursión alternativa',note:'Ver pestaña actividades'},
+    {fecha:'Lun 17 ago',act:'Recorrido circuito (mañana) · trabajo remoto',note:''},
+    {fecha:'Mar 18 ago',act:'Check-out · viaje de vuelta',note:'Confirmar hora de vuelo'},
+  ];
+  $('panel-resumen').innerHTML=`
+<h2>Resumen del viaje</h2>
+<div style="margin-bottom:1.25rem">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+    <span style="font-size:12px;color:var(--color-text-secondary)">Opciones confirmadas: ${confirmed}/5</span>
+    <span style="font-size:12px;font-weight:500">${pct}%</span>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+</div>
+<div class="summary-grid">
+  <div class="metric-card">
+    <div class="metric-label">Total Santi (MDZ)</div>
+    <div class="metric-value">$${fmt(r.totalSanti)}</div>
+    <div class="metric-sub">${r.svuelo?'Vuelo: $'+fmt(r.svuelo.precio):'Vuelo sin confirmar'}</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Total Amigo (BUE)</div>
+    <div class="metric-value">$${fmt(r.totalAmigo)}</div>
+    <div class="metric-sub">${r.avuelo?'Vuelo: $'+fmt(r.avuelo.precio):'Vuelo sin confirmar'}</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Hospedaje por persona</div>
+    <div class="metric-value">${r.hosp?'$'+fmt(r.hospPP):'—'}</div>
+    <div class="metric-sub">${r.hosp?r.hosp.nombre:'Sin seleccionar'}</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Día de ski por persona</div>
+    <div class="metric-value">$${fmt(r.paseP+r.equipoP+r.ropaP)}</div>
+    <div class="metric-sub">Pase + equipo + ropa</div>
+  </div>
+</div>
+<div class="divider"></div>
+<h3>Opciones seleccionadas</h3>
+<div style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.25rem">
+${lineItem('Vuelo Santi',r.svuelo?r.svuelo.nombre:'Sin seleccionar',r.svuelo?r.svuelo.precio:null,'vuelos')}
+${lineItem('Vuelo Amigo',r.avuelo?r.avuelo.nombre:'Sin seleccionar',r.avuelo?r.avuelo.precio:null,'vuelos')}
+${lineItem('Hospedaje (p/p)',r.hosp?r.hosp.nombre:'Sin seleccionar',r.hosp?r.hospPP:null,'hospedaje')}
+${lineItem('Pase ski',r.pase?r.pase.nombre:'Sin seleccionar',r.pase?r.pase.precio:null,'ski')}
+${lineItem('Equipo ski',r.equipo?r.equipo.nombre:'Sin seleccionar',r.equipo?r.equipo.precio:null,'ski')}
+${lineItem('Ropa de nieve',r.ropa?r.ropa.nombre:'Sin seleccionar',r.ropa?r.ropa.precio:null,'ski')}
+${lineItem('Actividad día 3',r.act?r.act.nombre:'Sin seleccionar',r.act&&r.act.precio?r.act.precio:null,'actividades')}
+</div>
+<div class="divider"></div>
+<h3>Itinerario</h3>
+${itinerary.map(d=>`<div class="itinerary-day"><div class="itinerary-day-header"><span class="day-label">${d.fecha}</span><span class="day-activity">${d.act}</span></div>${d.note?`<div class="day-note">${d.note}</div>`:''}</div>`).join('')}`;
+}
+
+function lineItem(label,name,price,tab){
+  const isSet=price!==null;
+  return`<div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .75rem;border-radius:var(--border-radius-md);background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary)">
+    <div><span style="font-size:11px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.04em">${label}</span>
+    <div style="font-size:13px;${isSet?'':'color:var(--color-text-secondary)'}">${name}${!isSet?` <button onclick="switchTab('${tab}')" style="background:none;border:none;cursor:pointer;color:#185FA5;font-size:11px;font-family:var(--font-sans);padding:0">→ elegir</button>`:''}</div></div>
+    ${isSet?`<div class="price-tag">$${fmt(price)}</div>`:`<div style="font-size:12px;color:var(--color-text-tertiary)">—</div>`}
+  </div>`;
+}
+
+function switchTab(id){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===id));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  $('panel-'+id).classList.add('active');
+  renderPanel(id);
+}
+
+function renderVuelos(){
+  const html=p=>{
+    const list=state.vuelos[p];
+    const quien=p==='santi'?'Santi (desde Mendoza — MDZ)':'Amigo (desde Buenos Aires — BUE)';
+    return`<div style="margin-bottom:1.5rem"><div class="section-header"><h3>${quien}</h3></div>
+    ${list.map(v=>`<div class="card${v.checked?' done':''}"><div class="card-row">
+      <div class="checkbox${v.checked?' checked':''}" onclick="toggleVuelo('${p}',${v.id})"></div>
+      <div class="card-body"><div class="item-name">${v.nombre}${v.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
+      <div class="item-meta">${v.aerolinea?`<span class="badge badge-gray">${v.aerolinea}</span>`:''}
+      ${v.fechaIda?`<span>Ida: ${v.fechaIda}</span>`:''}${v.fechaVuelta?`<span>Vuelta: ${v.fechaVuelta}</span>`:''}
+      ${v.precio?`<span class="price-tag">$${fmt(v.precio)}</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">precio a cotizar</span>'}
+      ${v.link?`<a href="${v.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}</div></div>
+      <div class="card-actions"><button class="btn-icon" onclick="editVuelo('${p}',${v.id})"><i class="ti ti-edit"></i></button>
+      <button class="btn-icon" onclick="deleteVuelo('${p}',${v.id})"><i class="ti ti-trash"></i></button></div>
+    </div></div>`).join('')}
+    <button class="add-btn" onclick="addVuelo('${p}')"><i class="ti ti-plus"></i> Agregar opción de vuelo</button></div>`;
+  };
+  $('panel-vuelos').innerHTML=`<h2>Vuelos</h2>${html('santi')}${html('amigo')}`;
+}
+
+function renderHospedaje(){
+  $('panel-hospedaje').innerHTML=`<h2>Hospedaje <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">14–18 ago · 4 noches</span></h2>
+  ${state.hospedaje.map(h=>`<div class="card${h.checked?' done':''}"><div class="card-row">
+    <div class="checkbox${h.checked?' checked':''}" onclick="toggleItem('hospedaje',${h.id})"></div>
+    <div class="card-body"><div class="item-name">${h.nombre}${h.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
+    <div class="item-meta"><span class="badge ${platformBadge(h.plataforma)}">${h.plataforma}</span>
+    ${h.fechas?`<span>${h.fechas}</span>`:''}
+    ${h.precioTotal>1000?`<span class="price-tag">$${fmt(h.precioTotal)} total · $${fmt(h.precioTotal/2)} p/p</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">precio a consultar</span>'}
+    ${h.link?`<a href="${h.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
+    ${h.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${h.notas}</span>`:''}</div></div>
+    <div class="card-actions"><button class="btn-icon" onclick="editHosp(${h.id})"><i class="ti ti-edit"></i></button>
+    <button class="btn-icon" onclick="deleteItem('hospedaje',${h.id})"><i class="ti ti-trash"></i></button></div>
+  </div></div>`).join('')}
+  <button class="add-btn" onclick="addHosp()"><i class="ti ti-plus"></i> Agregar hospedaje</button>`;
+}
+
+function skiSection(key,title){
+  const list=state.ski[key];
+  return`<div style="margin-bottom:1.5rem"><div class="section-header"><h3>${title}</h3></div>
+  ${list.map(item=>`<div class="card${item.checked?' done':''}"><div class="card-row">
+    <div class="checkbox${item.checked?' checked':''}" onclick="toggleSki('${key}',${item.id})"></div>
+    <div class="card-body"><div class="item-name">${item.nombre}${item.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
+    <div class="item-meta">${item.descripcion?`<span style="color:var(--color-text-secondary)">${item.descripcion}</span>`:''}
+    ${item.precio>0?`<span class="price-tag">$${fmt(item.precio)}</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">a consultar</span>'}
+    ${item.link?`<a href="${item.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
+    ${item.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${item.notas}</span>`:''}</div></div>
+    <div class="card-actions"><button class="btn-icon" onclick="editSkiItem('${key}',${item.id})"><i class="ti ti-edit"></i></button>
+    <button class="btn-icon" onclick="deleteSkiItem('${key}',${item.id})"><i class="ti ti-trash"></i></button></div>
+  </div></div>`).join('')}
+  <button class="add-btn" onclick="addSkiItem('${key}')"><i class="ti ti-plus"></i> Agregar opción</button></div>`;
+}
+
+function renderSki(){
+  const pase=getSelected(state.ski.pase);
+  const equipo=getSelected(state.ski.equipo);
+  const ropa=getSelected(state.ski.ropa);
+  const total=(pase?.precio||0)+(equipo?.precio||0)+(ropa?.precio||0);
+  $('panel-ski').innerHTML=`<h2>Ski & Equipo <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">Sáb 15 ago · Cerro Catedral</span></h2>
+  ${total>0?`<div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.75rem 1rem;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;color:var(--color-text-secondary)">Total estimado día de ski (p/persona)</span><span style="font-weight:500;font-size:15px">$${fmt(total)}</span></div>`:''}
+  ${skiSection('pase','Pase de ski')}
+  <div class="divider"></div>
+  ${skiSection('equipo','Alquiler de equipo')}
+  <div class="divider"></div>
+  ${skiSection('ropa','Alquiler de ropa de nieve')}`;
+}
+
+function renderActividades(){
+  $('panel-actividades').innerHTML=`<h2>Actividades <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">Dom 16 ago</span></h2>
+  ${state.actividades.map(a=>`<div class="card${a.checked?' done':''}"><div class="card-row">
+    <div class="checkbox${a.checked?' checked':''}" onclick="toggleItem('actividades',${a.id})"></div>
+    <div class="card-body"><div class="item-name">${a.nombre}${a.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
+    <div class="item-meta">${a.tipo?`<span class="badge badge-gray">${a.tipo}</span>`:''}
+    ${a.duracion?`<span>${a.duracion}</span>`:''}
+    ${a.precio>0?`<span class="price-tag">$${fmt(a.precio)}</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">precio a consultar</span>'}
+    ${a.link?`<a href="${a.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
+    ${a.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${a.notas}</span>`:''}</div></div>
+    <div class="card-actions"><button class="btn-icon" onclick="editActividad(${a.id})"><i class="ti ti-edit"></i></button>
+    <button class="btn-icon" onclick="deleteItem('actividades',${a.id})"><i class="ti ti-trash"></i></button></div>
+  </div></div>`).join('')}
+  <button class="add-btn" onclick="addActividad()"><i class="ti ti-plus"></i> Agregar actividad</button>`;
+}
+
+function renderTraslados(){
+  $('panel-traslados').innerHTML=`<h2>Traslados</h2>
+  ${state.traslados.map(t=>`<div class="card${t.checked?' done':''}"><div class="card-row">
+    <div class="checkbox${t.checked?' checked':''}" onclick="toggleItem('traslados',${t.id})"></div>
+    <div class="card-body"><div class="item-name">${t.nombre}${t.checked?'<span class="selected-badge">Confirmado</span>':''}</div>
+    <div class="item-meta">${t.tipo?`<span class="badge badge-gray">${t.tipo}</span>`:''}
+    ${t.precio>0?`<span class="price-tag">$${fmt(t.precio)} p/p</span>`:'<span class="traslado-pending">precio a cotizar</span>'}
+    ${t.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${t.notas}</span>`:''}</div></div>
+    <div class="card-actions"><button class="btn-icon" onclick="editTraslado(${t.id})"><i class="ti ti-edit"></i></button>
+    <button class="btn-icon" onclick="deleteItem('traslados',${t.id})"><i class="ti ti-trash"></i></button></div>
+  </div></div>`).join('')}
+  <button class="add-btn" onclick="addTraslado()"><i class="ti ti-plus"></i> Agregar traslado</button>`;
+}
+
+function renderPanel(id){
+  if(id==='resumen')renderResumen();
+  else if(id==='vuelos')renderVuelos();
+  else if(id==='hospedaje')renderHospedaje();
+  else if(id==='ski')renderSki();
+  else if(id==='actividades')renderActividades();
+  else if(id==='traslados')renderTraslados();
+}
+
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)));
+
+function toggleVuelo(persona,id){state.vuelos[persona]=state.vuelos[persona].map(v=>({...v,checked:v.id===id?!v.checked:false}));saveState();renderVuelos();renderResumen();}
+function toggleItem(col,id){state[col]=state[col].map(i=>({...i,checked:i.id===id?!i.checked:false}));saveState();renderPanel(col);renderResumen();}
+function toggleSki(key,id){state.ski[key]=state.ski[key].map(i=>({...i,checked:i.id===id?!i.checked:false}));saveState();renderSki();renderResumen();}
+
+function nextId(arr){return Math.max(0,...arr.map(i=>i.id))+1;}
+function openModal(html){$('modal-box').innerHTML=html;$('modal-overlay').style.display='flex';}
+function closeModal(){$('modal-overlay').style.display='none';}
+$('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay'))closeModal();});
+
+function formVuelo(p,v){
+  const e=!!v;v=v||{nombre:'',aerolinea:'',fechaIda:'',fechaVuelta:'',precio:'',link:''};
+  openModal(`<h3>${e?'Editar vuelo':'Nuevo vuelo'} — ${p==='santi'?'Santi (MDZ)':'Amigo (BUE)'}</h3>
+    <div class="form-group"><label>Nombre</label><input id="fn" value="${v.nombre}"></div>
+    <div class="form-group"><label>Aerolínea</label><input id="fa" value="${v.aerolinea}"></div>
+    <div class="form-row"><div class="form-group"><label>Fecha ida</label><input id="fi" value="${v.fechaIda}" placeholder="ej: 13-ago"></div>
+    <div class="form-group"><label>Fecha vuelta</label><input id="fv" value="${v.fechaVuelta}" placeholder="ej: 18-ago"></div></div>
+    <div class="form-group"><label>Precio (ARS)</label><input id="fp" type="number" value="${v.precio}"></div>
+    <div class="form-group"><label>Link</label><input id="fl" value="${v.link}" placeholder="https://..."></div>
+    <div class="modal-actions">${e?`<button class="btn-danger" onclick="deleteVuelo('${p}',${v.id});closeModal()">Eliminar</button>`:''}
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+    <button class="btn-primary" onclick="saveVuelo('${p}',${e?v.id:0})">Guardar</button></div>`);
+}
+function addVuelo(p){formVuelo(p,null);}
+function editVuelo(p,id){formVuelo(p,state.vuelos[p].find(v=>v.id===id));}
+function saveVuelo(p,id){
+  const n={nombre:$('fn').value,aerolinea:$('fa').value,fechaIda:$('fi').value,fechaVuelta:$('fv').value,precio:parseFloat($('fp').value)||0,link:$('fl').value,checked:false};
+  if(id){state.vuelos[p]=state.vuelos[p].map(v=>v.id===id?{...v,...n,id}:v);}else{state.vuelos[p].push({...n,id:nextId(state.vuelos[p])});}
+  saveState();closeModal();renderVuelos();renderResumen();
+}
+function deleteVuelo(p,id){state.vuelos[p]=state.vuelos[p].filter(v=>v.id!==id);saveState();renderVuelos();renderResumen();}
+
+function formHosp(h){
+  const e=!!h;h=h||{nombre:'',plataforma:'Airbnb',fechas:'14–18 ago',precioTotal:'',link:'',notas:''};
+  openModal(`<h3>${e?'Editar hospedaje':'Nuevo hospedaje'}</h3>
+    <div class="form-group"><label>Nombre</label><input id="hn" value="${h.nombre}"></div>
+    <div class="form-row"><div class="form-group"><label>Plataforma</label><select id="hp">
+    ${['Airbnb','Airbnb AR','Booking','Hostelworld','Otro'].map(o=>`<option ${h.plataforma===o?'selected':''}>${o}</option>`).join('')}
+    </select></div><div class="form-group"><label>Fechas</label><input id="hf" value="${h.fechas}"></div></div>
+    <div class="form-group"><label>Precio total (ARS, 2 personas)</label><input id="hpr" type="number" value="${h.precioTotal}"></div>
+    <div class="form-group"><label>Link</label><input id="hl" value="${h.link}" placeholder="https://..."></div>
+    <div class="form-group"><label>Notas</label><textarea id="hno">${h.notas||''}</textarea></div>
+    <div class="modal-actions">${e?`<button class="btn-danger" onclick="deleteItem('hospedaje',${h.id});closeModal()">Eliminar</button>`:''}
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+    <button class="btn-primary" onclick="saveHosp(${e?h.id:0})">Guardar</button></div>`);
+}
+function addHosp(){formHosp(null);}
+function editHosp(id){formHosp(state.hospedaje.find(h=>h.id===id));}
+function saveHosp(id){
+  const n={nombre:$('hn').value,plataforma:$('hp').value,fechas:$('hf').value,precioTotal:parseFloat($('hpr').value)||0,link:$('hl').value,notas:$('hno').value,checked:false};
+  if(id){state.hospedaje=state.hospedaje.map(h=>h.id===id?{...h,...n,id}:h);}else{state.hospedaje.push({...n,id:nextId(state.hospedaje)});}
+  saveState();closeModal();renderHospedaje();renderResumen();
+}
+function deleteItem(col,id){state[col]=state[col].filter(i=>i.id!==id);saveState();renderPanel(col);renderResumen();}
+
+function formSkiItem(key,item){
+  const e=!!item;item=item||{nombre:'',descripcion:'',precio:'',link:'',notas:''};
+  openModal(`<h3>${e?'Editar':'Nueva opción'}</h3>
+    <div class="form-group"><label>Nombre</label><input id="sn" value="${item.nombre}"></div>
+    <div class="form-group"><label>Descripción</label><input id="sd" value="${item.descripcion}"></div>
+    <div class="form-group"><label>Precio (ARS)</label><input id="sp" type="number" value="${item.precio}"></div>
+    <div class="form-group"><label>Link</label><input id="sl" value="${item.link}" placeholder="https://..."></div>
+    <div class="form-group"><label>Notas</label><textarea id="sno">${item.notas||''}</textarea></div>
+    <div class="modal-actions">${e?`<button class="btn-danger" onclick="deleteSkiItem('${key}',${item.id});closeModal()">Eliminar</button>`:''}
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+    <button class="btn-primary" onclick="saveSkiItem('${key}',${e?item.id:0})">Guardar</button></div>`);
+}
+function addSkiItem(k){formSkiItem(k,null);}
+function editSkiItem(k,id){formSkiItem(k,state.ski[k].find(i=>i.id===id));}
+function saveSkiItem(k,id){
+  const n={nombre:$('sn').value,descripcion:$('sd').value,precio:parseFloat($('sp').value)||0,link:$('sl').value,notas:$('sno').value,checked:false};
+  if(id){state.ski[k]=state.ski[k].map(i=>i.id===id?{...i,...n,id}:i);}else{state.ski[k].push({...n,id:nextId(state.ski[k])});}
+  saveState();closeModal();renderSki();renderResumen();
+}
+function deleteSkiItem(k,id){state.ski[k]=state.ski[k].filter(i=>i.id!==id);saveState();renderSki();renderResumen();}
+
+function formActividad(a){
+  const e=!!a;a=a||{nombre:'',tipo:'Excursión',precio:'',duracion:'',link:'',notas:''};
+  openModal(`<h3>${e?'Editar actividad':'Nueva actividad'}</h3>
+    <div class="form-group"><label>Nombre</label><input id="an" value="${a.nombre}"></div>
+    <div class="form-row"><div class="form-group"><label>Tipo</label><select id="at">
+    ${['Ski','Excursión','Circuito','Otro'].map(o=>`<option ${a.tipo===o?'selected':''}>${o}</option>`).join('')}
+    </select></div><div class="form-group"><label>Duración</label><input id="ad" value="${a.duracion}" placeholder="ej: Medio día"></div></div>
+    <div class="form-group"><label>Precio (ARS)</label><input id="apr" type="number" value="${a.precio}"></div>
+    <div class="form-group"><label>Link</label><input id="al" value="${a.link}" placeholder="https://..."></div>
+    <div class="form-group"><label>Notas</label><textarea id="ano">${a.notas||''}</textarea></div>
+    <div class="modal-actions">${e?`<button class="btn-danger" onclick="deleteItem('actividades',${a.id});closeModal()">Eliminar</button>`:''}
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+    <button class="btn-primary" onclick="saveActividad(${e?a.id:0})">Guardar</button></div>`);
+}
+function addActividad(){formActividad(null);}
+function editActividad(id){formActividad(state.actividades.find(a=>a.id===id));}
+function saveActividad(id){
+  const n={nombre:$('an').value,tipo:$('at').value,duracion:$('ad').value,precio:parseFloat($('apr').value)||0,link:$('al').value,notas:$('ano').value,checked:false};
+  if(id){state.actividades=state.actividades.map(a=>a.id===id?{...a,...n,id}:a);}else{state.actividades.push({...n,id:nextId(state.actividades)});}
+  saveState();closeModal();renderActividades();renderResumen();
+}
+
+function formTraslado(t){
+  const e=!!t;t=t||{nombre:'',tipo:'Remis / Transfer',precio:'',notas:''};
+  openModal(`<h3>${e?'Editar traslado':'Nuevo traslado'}</h3>
+    <div class="form-group"><label>Tramo</label><input id="tn" value="${t.nombre}"></div>
+    <div class="form-row"><div class="form-group"><label>Tipo</label><select id="tt">
+    ${['Remis / Transfer','Bus','Bus / Remis','Tour / Auto','Otro'].map(o=>`<option ${t.tipo===o?'selected':''}>${o}</option>`).join('')}
+    </select></div><div class="form-group"><label>Precio p/p (ARS)</label><input id="tpr" type="number" value="${t.precio}"></div></div>
+    <div class="form-group"><label>Notas</label><textarea id="tno">${t.notas||''}</textarea></div>
+    <div class="modal-actions">${e?`<button class="btn-danger" onclick="deleteItem('traslados',${t.id});closeModal()">Eliminar</button>`:''}
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+    <button class="btn-primary" onclick="saveTraslado(${e?t.id:0})">Guardar</button></div>`);
+}
+function addTraslado(){formTraslado(null);}
+function editTraslado(id){formTraslado(state.traslados.find(t=>t.id===id));}
+function saveTraslado(id){
+  const n={nombre:$('tn').value,tipo:$('tt').value,precio:parseFloat($('tpr').value)||0,notas:$('tno').value,checked:false};
+  if(id){state.traslados=state.traslados.map(t=>t.id===id?{...t,...n,id}:t);}else{state.traslados.push({...n,id:nextId(state.traslados)});}
+  saveState();closeModal();renderTraslados();renderResumen();
+}
+
+renderResumen();
+</script>
+</body>
+</html>
