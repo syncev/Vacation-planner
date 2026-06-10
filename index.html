@@ -51,7 +51,7 @@ body::-webkit-scrollbar{display:none}
 .panel{display:none}.panel.active{display:block}
 .card{background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:.75rem}
 .card.done{opacity:.6}
-.card.done .item-name{text-decoration:line-through;color:var(--color-text-secondary)}
+.card.done .item-name{text-decoration:underline;color:var(--color-text-secondary)}
 .card-row{display:flex;align-items:flex-start;gap:12px}
 .card-body{flex:1;min-width:0}
 .item-name{font-weight:500;font-size:14px;margin-bottom:4px;word-break:break-word}
@@ -189,8 +189,13 @@ function migrateState(s){
   if(!s.ski)s.ski={dias:[],pase:[],equipo:[],ropa:[]};
   else{if(!s.ski.dias)s.ski.dias=[];if(!s.ski.pase)s.ski.pase=[];if(!s.ski.equipo)s.ski.equipo=[];if(!s.ski.ropa)s.ski.ropa=[];}
   if(s.actividades)s.actividades=s.actividades.map(a=>({fecha:'',fechaFin:'',participantes:[],...a}));
+  if(!s.hospedaje)s.hospedaje=[];
+  else s.hospedaje=s.hospedaje.map(h=>({participantes:[],...h}));
+  if(!s.traslados)s.traslados=[];
+  else s.traslados=s.traslados.map(t=>({participantes:[],...t}));
+  ['pase','equipo','ropa'].forEach(k=>{s.ski[k]=s.ski[k].map(i=>({participantes:[],...i}));});
   if(!s.customTabs)s.customTabs=[];
-  else s.customTabs=s.customTabs.map(ct=>({fechas:[],...ct}));
+  else s.customTabs=s.customTabs.map(ct=>({fechas:[],...ct,secciones:(ct.secciones||[]).map(sec=>({...sec,items:(sec.items||[]).map(i=>({participantes:[],...i}))}))}));
   if(s.skiVisible===undefined)s.skiVisible=true;
   if(!s.skiName)s.skiName='Ski & Equipo';
   if(s.skiDesc===undefined)s.skiDesc='';
@@ -228,6 +233,31 @@ function toggleParticipante(actId,personaId){
     if(a.participantes.length===all.length)a.participantes=[];
   }
   saveState();renderActividades();renderResumen();
+}
+let _particExpanded=new Set();
+function toggleParticOpen(key,panel){_particExpanded.has(key)?_particExpanded.delete(key):_particExpanded.add(key);renderPanel(panel);}
+function _applyParticToggle(item,personaId){
+  const all=state.personas.map(p=>p.id);
+  if(!(item.participantes||[]).length){
+    item.participantes=all.filter(id=>id!==personaId);
+  } else if(item.participantes.includes(personaId)){
+    item.participantes=item.participantes.filter(id=>id!==personaId);
+    if(item.participantes.length===all.length)item.participantes=[];
+  } else {
+    item.participantes=[...item.participantes,personaId];
+    if(item.participantes.length===all.length)item.participantes=[];
+  }
+}
+function toggleHospPartic(itemId,personaId){const h=state.hospedaje.find(h=>h.id===itemId);if(!h)return;_applyParticToggle(h,personaId);saveState();renderHospedaje();renderResumen();}
+function toggleTrasladoPartic(itemId,personaId){const t=state.traslados.find(t=>t.id===itemId);if(!t)return;_applyParticToggle(t,personaId);saveState();renderTraslados();renderResumen();}
+function toggleSkiItemPartic(key,itemId,personaId){const i=(state.ski[key]||[]).find(i=>i.id===itemId);if(!i)return;_applyParticToggle(i,personaId);saveState();renderSki();renderResumen();}
+function toggleCustomItemPartic(tabId,sectionId,itemId,personaId){
+  const ct=(state.customTabs||[]).find(t=>t.id===tabId);
+  const sec=ct&&(ct.secciones||[]).find(s=>s.id===sectionId);
+  const item=sec&&(sec.items||[]).find(i=>i.id===itemId);
+  if(!item)return;
+  _applyParticToggle(item,personaId);
+  saveState();renderCustomTab(tabId);renderResumen();
 }
 function showUndoToast(label,restoreFn,duration=5000){
   // duration=0 → persistent; duration>0 → auto-dismiss after that many ms
@@ -476,7 +506,11 @@ function calcResumen(){
 
   const hospChecked=state.hospedaje.filter(h=>h.checked);
   const hospTotal=hospChecked.reduce((s,h)=>s+(h.precioTotal||0),0);
-  const hospPP=hospChecked.length>0?Math.round(hospTotal/n):0;
+  const hospForPerson=id=>hospChecked.reduce((sum,h)=>{
+    const p=h.participantes||[];
+    if(!p.length||p.includes(id)){const cnt=p.length||n;return sum+Math.round((h.precioTotal||0)/cnt);}
+    return sum;
+  },0);
 
   const pases=(state.ski.pase||[]).filter(i=>i.checked);
   const equipos=(state.ski.equipo||[]).filter(i=>i.checked);
@@ -484,35 +518,61 @@ function calcResumen(){
   const skiItems=[...pases,...equipos,...ropas];
   const skiPorDia=skiItems.reduce((s,i)=>s+(i.precio||0),0);
   const skiDias=(state.ski.dias||[]).length;
-  const skiPP=skiPorDia*Math.max(skiDias,1);
+  const skiForPerson=id=>skiItems.reduce((sum,i)=>{
+    const p=i.participantes||[];
+    return(!p.length||p.includes(id))?sum+(i.precio||0):sum;
+  },0)*Math.max(skiDias,1);
 
   const trasladosChecked=state.traslados.filter(t=>t.checked);
-  const trasladosPP=trasladosChecked.reduce((s,t)=>s+(t.precioPP!==false?(t.precio||0):Math.round((t.precio||0)/n)),0);
+  const trasladosForPerson=id=>trasladosChecked.reduce((sum,t)=>{
+    const p=t.participantes||[];
+    if(!p.length||p.includes(id)){
+      if(t.precioPP!==false)return sum+(t.precio||0);
+      const cnt=p.length||n;
+      return sum+Math.round((t.precio||0)/cnt);
+    }
+    return sum;
+  },0);
 
   const actChecked=state.actividades.filter(a=>a.checked);
 
   const customSummary=(state.customTabs||[]).map(ct=>{
     const items=(ct.secciones||[]).flatMap(s=>(s.items||[]).filter(i=>i.checked));
     const total=items.reduce((s,i)=>s+(i.precio||0),0);
-    return{id:ct.id,nombre:ct.nombre,items,total};
+    const forPerson=id=>items.reduce((sum,i)=>{
+      const p=i.participantes||[];
+      return(!p.length||p.includes(id))?sum+(i.precio||0):sum;
+    },0);
+    return{id:ct.id,nombre:ct.nombre,items,total,forPerson};
   }).filter(ct=>ct.items.length>0);
 
   const personas=state.personas.map(p=>{
     const vuelosChecked=(state.vuelos[String(p.id)]||[]).filter(v=>v.checked);
     const vueloTotal=vuelosChecked.reduce((s,v)=>s+(v.precio||0),0);
     const actForMe=actChecked.filter(a=>!(a.participantes||[]).length||(a.participantes||[]).includes(p.id)).reduce((s,a)=>s+(a.precio||0),0);
-    const total=vueloTotal+hospPP+skiPP+trasladosPP+actForMe;
+    const hospForMe=hospForPerson(p.id);
+    const skiForMe=skiForPerson(p.id);
+    const trasladosForMe=trasladosForPerson(p.id);
+    const customForMe=customSummary.reduce((sum,ct)=>sum+ct.forPerson(p.id),0);
+    const total=vueloTotal+hospForMe+skiForMe+trasladosForMe+actForMe+customForMe;
     const expenses=[
       {label:'Vuelo',amount:vueloTotal},
-      {label:'Hospedaje',amount:hospPP},
-      {label:state.skiName||'Ski',amount:skiPP},
-      {label:'Traslados',amount:trasladosPP},
+      {label:'Hospedaje',amount:hospForMe},
+      {label:state.skiName||'Ski',amount:skiForMe},
+      {label:'Traslados',amount:trasladosForMe},
       {label:'Actividades',amount:actForMe},
     ].filter(e=>e.amount>0).sort((a,b)=>b.amount-a.amount);
-    return{...p,vuelosChecked,vueloTotal,actForMe,total,topExpense:expenses[0]||null};
+    return{...p,vuelosChecked,vueloTotal,actForMe,hospForMe,skiForMe,trasladosForMe,customForMe,total,topExpense:expenses[0]||null};
   });
 
-  return{n,personas,hospChecked,hospTotal,hospPP,pases,equipos,ropas,skiItems,skiPorDia,skiPP,skiDias,trasladosChecked,trasladosPP,actChecked,customSummary};
+  const hospPP=personas.length?personas[0].hospForMe:Math.round(hospTotal/n);
+  const skiPP=personas.length?personas[0].skiForMe:skiPorDia*Math.max(skiDias,1);
+  const trasladosPP=personas.length?personas[0].trasladosForMe:trasladosChecked.reduce((s,t)=>s+(t.precioPP!==false?(t.precio||0):Math.round((t.precio||0)/n)),0);
+  const hospAllSame=personas.length<=1||personas.every(p=>p.hospForMe===hospPP);
+  const skiAllSame=personas.length<=1||personas.every(p=>p.skiForMe===skiPP);
+  const trasladosAllSame=personas.length<=1||personas.every(p=>p.trasladosForMe===trasladosPP);
+
+  return{n,personas,hospChecked,hospTotal,hospPP,hospAllSame,pases,equipos,ropas,skiItems,skiPorDia,skiPP,skiAllSame,skiDias,trasladosChecked,trasladosPP,trasladosAllSame,actChecked,customSummary};
 }
 
 function platformBadge(p){
@@ -580,6 +640,32 @@ function deletePersona(id){
   });
 }
 
+function _perPersonRows(personas,fieldFn){
+  return personas.map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:6px"><span style="font-size:12px;font-weight:600">${p.nombre}</span><span style="font-size:12px;font-weight:500;flex-shrink:0">${fieldFn(p)>0?'$'+fmt(fieldFn(p)):'—'}</span></div>`).join('');
+}
+function hospMetricCard(r){
+  const lbl=r.hospChecked.map(h=>h.fechas||h.nombre).join(' | ');
+  if(r.hospAllSame||r.personas.length<=1)return`<div class="metric-card"><div class="metric-label">Hospedaje (p/p)</div><div class="metric-value">$${fmt(r.hospPP)}</div><div class="metric-sub">${lbl}</div></div>`;
+  return`<div class="metric-card"><div class="metric-label">Hospedaje</div>${_perPersonRows(r.personas,p=>p.hospForMe)}<div style="font-size:11px;color:var(--color-text-tertiary);margin-top:4px">${lbl}</div></div>`;
+}
+function skiMetricCard(r){
+  const lbl=r.skiItems.map(i=>i.nombre).join(' + ');
+  const daysLbl=r.skiDias>1?' ('+r.skiDias+' días)':'';
+  if(r.skiAllSame||r.personas.length<=1)return`<div class="metric-card"><div class="metric-label">${state.skiName||'Ski & Equipo'}${daysLbl} p/p</div><div class="metric-value">$${fmt(r.skiPP)}</div><div class="metric-sub">${lbl}</div></div>`;
+  return`<div class="metric-card"><div class="metric-label">${state.skiName||'Ski & Equipo'}${daysLbl}</div>${_perPersonRows(r.personas,p=>p.skiForMe)}<div style="font-size:11px;color:var(--color-text-tertiary);margin-top:4px">${lbl}</div></div>`;
+}
+function trasladosMetricCard(r){
+  const lbl=r.trasladosChecked.length>2?r.trasladosChecked.length+' traslados':r.trasladosChecked.map(t=>t.nombre).join(', ');
+  if(r.trasladosAllSame||r.personas.length<=1)return`<div class="metric-card"><div class="metric-label">Traslados (p/p)</div><div class="metric-value">$${fmt(r.trasladosPP)}</div><div class="metric-sub">${lbl}</div></div>`;
+  return`<div class="metric-card"><div class="metric-label">Traslados</div>${_perPersonRows(r.personas,p=>p.trasladosForMe)}<div style="font-size:11px;color:var(--color-text-tertiary);margin-top:4px">${lbl}</div></div>`;
+}
+function customTabMetricCard(ct,r){
+  const perP=r.personas.map(p=>ct.forPerson(p.id));
+  const allSame=perP.length<=1||perP.every(c=>c===perP[0]);
+  const lbl=ct.items.length>2?ct.items.length+' ítems':ct.items.map(i=>i.nombre).join(' + ');
+  if(allSame)return`<div class="metric-card"><div class="metric-label">${ct.nombre}${r.personas.length>1?' (p/p)':''}</div><div class="metric-value">$${fmt(perP[0]||0)}</div><div class="metric-sub">${lbl}</div></div>`;
+  return`<div class="metric-card"><div class="metric-label">${ct.nombre}</div>${r.personas.map((p,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:6px"><span style="font-size:12px;font-weight:600">${p.nombre}</span><span style="font-size:12px;font-weight:500;flex-shrink:0">${perP[i]>0?'$'+fmt(perP[i]):'—'}</span></div>`).join('')}<div style="font-size:11px;color:var(--color-text-tertiary);margin-top:4px">${lbl}</div></div>`;
+}
 function actMetricCard(r){
   const actLabel=r.actChecked.length>2?r.actChecked.length+' actividades':r.actChecked.map(a=>a.nombre).join(', ');
   const costs=r.personas.map(p=>p.actForMe);
@@ -638,27 +724,11 @@ ${renderPersonas()}
     <div class="metric-label">Vuelos</div>
     ${r.personas.filter(p=>p.vuelosChecked.length>0).map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:6px"><span style="font-size:12px;font-weight:600">${p.nombre}</span><span style="font-size:12px;font-weight:500;flex-shrink:0">$${fmt(p.vueloTotal)}</span></div>`).join('')}
   </div>`:''}
-  ${r.hospChecked.length>0?`<div class="metric-card">
-    <div class="metric-label">Hospedaje (p/p)</div>
-    <div class="metric-value">$${fmt(r.hospPP)}</div>
-    <div class="metric-sub">${r.hospChecked.map(h=>h.fechas||h.nombre).join(' | ')}</div>
-  </div>`:''}
-  ${r.trasladosChecked.length>0?`<div class="metric-card">
-    <div class="metric-label">Traslados (p/p)</div>
-    <div class="metric-value">$${fmt(r.trasladosPP)}</div>
-    <div class="metric-sub">${r.trasladosChecked.length>2?r.trasladosChecked.length+' traslados':r.trasladosChecked.map(t=>t.nombre).join(', ')}</div>
-  </div>`:''}
+  ${r.hospChecked.length>0?hospMetricCard(r):''}
+  ${r.trasladosChecked.length>0?trasladosMetricCard(r):''}
   ${r.actChecked.length>0?actMetricCard(r):''}
-  ${r.skiItems.length>0?`<div class="metric-card">
-    <div class="metric-label">${state.skiName||'Ski & Equipo'}${r.skiDias>1?' ('+r.skiDias+' días)':''} p/p</div>
-    <div class="metric-value">$${fmt(r.skiPP)}</div>
-    <div class="metric-sub">${r.skiItems.map(i=>i.nombre).join(' + ')}</div>
-  </div>`:''}
-  ${r.customSummary.map(ct=>`<div class="metric-card">
-    <div class="metric-label">${ct.nombre}</div>
-    <div class="metric-value">$${fmt(ct.total)}</div>
-    <div class="metric-sub">${ct.items.length>2?ct.items.length+' ítems':ct.items.map(i=>i.nombre).join(' + ')}</div>
-  </div>`).join('')}
+  ${r.skiItems.length>0?skiMetricCard(r):''}
+  ${r.customSummary.map(ct=>customTabMetricCard(ct,r)).join('')}
 </div>
 <div class="divider"></div>
 <h3>Opciones seleccionadas</h3>
@@ -717,17 +787,36 @@ function renderVuelos(){
 
 function renderHospedaje(){
   $('panel-hospedaje').innerHTML=`<h2>Hospedaje ${tabNoteHtml('hospedaje')}</h2>
-  ${state.hospedaje.map(h=>`<div class="card${h.checked?' done':''}"><div class="card-row">
-    <div class="checkbox${h.checked?' checked':''}" onclick="toggleItem('hospedaje',${h.id})"></div>
-    <div class="card-body"><div class="item-name">${h.nombre}${h.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
-    <div class="item-meta"><span class="badge ${platformBadge(h.plataforma)}">${h.plataforma}</span>
-    ${h.fechas?`<span>${h.fechas}</span>`:''}
-    ${h.precioTotal>1000?`<span class="price-tag">$${fmt(h.precioTotal)} total · $${fmt(Math.round(h.precioTotal/Math.max(state.personas.length,1)))} p/p</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">precio a consultar</span>'}
-    ${h.link?`<a href="${h.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
-    ${h.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${h.notas}</span>`:''}</div></div>
-    <div class="card-actions"><button class="btn-icon" onclick="editHosp(${h.id})"><i class="ti ti-edit"></i></button>
-    <button class="btn-icon" onclick="deleteItem('hospedaje',${h.id})"><i class="ti ti-trash"></i></button></div>
-  </div></div>`).join('')}
+  ${state.hospedaje.map(h=>{
+    const partic=h.participantes||[];
+    const hasSubset=partic.length>0&&partic.length<state.personas.length;
+    const expanded=_particExpanded.has('h-'+h.id);
+    const partChips=state.personas.map(p=>{
+      const sel=!partic.length||partic.includes(p.id);
+      return`<button onclick="toggleHospPartic(${h.id},${p.id})" style="padding:3px 10px;border-radius:12px;font-size:12px;cursor:pointer;border:1px solid ${sel?'#1D9E75':'var(--color-border-secondary)'};background:${sel?'#1D9E75':'var(--color-background-primary)'};color:${sel?'white':'var(--color-text-primary)'}">${p.nombre}</button>`;
+    }).join('');
+    const ppCount=partic.length||Math.max(state.personas.length,1);
+    return`<div class="card${h.checked?' done':''}">
+      <div class="card-row">
+        <div class="checkbox${h.checked?' checked':''}" onclick="toggleItem('hospedaje',${h.id})"></div>
+        <div class="card-body"><div class="item-name">${h.nombre}${h.checked?'<span class="selected-badge">Seleccionado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
+        <div class="item-meta"><span class="badge ${platformBadge(h.plataforma)}">${h.plataforma}</span>
+        ${h.fechas?`<span>${h.fechas}</span>`:''}
+        ${h.precioTotal>1000?`<span class="price-tag">$${fmt(h.precioTotal)} total · $${fmt(Math.round(h.precioTotal/ppCount))} p/p</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">precio a consultar</span>'}
+        ${h.link?`<a href="${h.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
+        ${h.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${h.notas}</span>`:''}</div></div>
+        <div class="card-actions">
+          ${state.personas.length>1?`<button class="btn-icon${hasSubset?' btn-icon-active':''}" onclick="toggleParticOpen('h-${h.id}','hospedaje')" title="Participantes" style="${hasSubset?'color:#1D9E75':''}"><i class="ti ti-users"></i></button>`:''}
+          <button class="btn-icon" onclick="editHosp(${h.id})"><i class="ti ti-edit"></i></button>
+          <button class="btn-icon" onclick="deleteItem('hospedaje',${h.id})"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>
+      ${expanded?`<div style="padding:.5rem .75rem .75rem;border-top:.5px solid var(--color-border-tertiary);margin-top:0">
+        <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px">¿Quiénes se hospedan aquí?</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${partChips}</div>
+      </div>`:''}
+    </div>`;
+  }).join('')}
   <button class="add-btn" onclick="addHosp()"><i class="ti ti-plus"></i> Agregar hospedaje</button>`;
 }
 
@@ -736,16 +825,34 @@ function skiSection(key,defaultTitle){
   const list=state.ski[key]||[];
   return`<div style="margin-bottom:1.5rem"><div class="section-header"><h3>${title}</h3><button class="btn-icon" onclick="editSkiSection('${key}')"><i class="ti ti-edit"></i></button></div>
   ${list.length===0?`<p style="font-size:12px;color:var(--color-text-tertiary);padding:.25rem 0 .5rem">Sin opciones cargadas. Usá <strong>+ Agregar opción</strong> para comparar alternativas.</p>`:''}
-  ${list.map(item=>`<div class="card${item.checked?' done':''}"><div class="card-row">
-    <div class="checkbox${item.checked?' checked':''}" onclick="toggleSki('${key}',${item.id})"></div>
-    <div class="card-body"><div class="item-name">${item.nombre}${item.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
-    <div class="item-meta">${item.descripcion?`<span style="color:var(--color-text-secondary)">${item.descripcion}</span>`:''}
-    ${item.precio>0?`<span class="price-tag">$${fmt(item.precio)}</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">a consultar</span>'}
-    ${item.link?`<a href="${item.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
-    ${item.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${item.notas}</span>`:''}</div></div>
-    <div class="card-actions"><button class="btn-icon" onclick="editSkiItem('${key}',${item.id})"><i class="ti ti-edit"></i></button>
-    <button class="btn-icon" onclick="deleteSkiItem('${key}',${item.id})"><i class="ti ti-trash"></i></button></div>
-  </div></div>`).join('')}
+  ${list.map(item=>{
+    const partic=item.participantes||[];
+    const hasSubset=partic.length>0&&partic.length<state.personas.length;
+    const expanded=_particExpanded.has('ski-'+key+'-'+item.id);
+    const partChips=state.personas.map(p=>{
+      const sel=!partic.length||partic.includes(p.id);
+      return`<button onclick="toggleSkiItemPartic('${key}',${item.id},${p.id})" style="padding:3px 10px;border-radius:12px;font-size:12px;cursor:pointer;border:1px solid ${sel?'#1D9E75':'var(--color-border-secondary)'};background:${sel?'#1D9E75':'var(--color-background-primary)'};color:${sel?'white':'var(--color-text-primary)'}">${p.nombre}</button>`;
+    }).join('');
+    return`<div class="card${item.checked?' done':''}">
+      <div class="card-row">
+        <div class="checkbox${item.checked?' checked':''}" onclick="toggleSki('${key}',${item.id})"></div>
+        <div class="card-body"><div class="item-name">${item.nombre}${item.checked?'<span class="selected-badge">Seleccionado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
+        <div class="item-meta">${item.descripcion?`<span style="color:var(--color-text-secondary)">${item.descripcion}</span>`:''}
+        ${item.precio>0?`<span class="price-tag">$${fmt(item.precio)}</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">a consultar</span>'}
+        ${item.link?`<a href="${item.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
+        ${item.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${item.notas}</span>`:''}</div></div>
+        <div class="card-actions">
+          ${state.personas.length>1?`<button class="btn-icon${hasSubset?' btn-icon-active':''}" onclick="toggleParticOpen('ski-${key}-${item.id}','ski')" title="Participantes" style="${hasSubset?'color:#1D9E75':''}"><i class="ti ti-users"></i></button>`:''}
+          <button class="btn-icon" onclick="editSkiItem('${key}',${item.id})"><i class="ti ti-edit"></i></button>
+          <button class="btn-icon" onclick="deleteSkiItem('${key}',${item.id})"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>
+      ${expanded?`<div style="padding:.5rem .75rem .75rem;border-top:.5px solid var(--color-border-tertiary);margin-top:0">
+        <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px">¿Quiénes participan?</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${partChips}</div>
+      </div>`:''}
+    </div>`;
+  }).join('')}
   <button class="add-btn" onclick="addSkiItem('${key}')"><i class="ti ti-plus"></i> Agregar opción</button></div>`;
 }
 
@@ -811,15 +918,33 @@ function renderActividades(){
 
 function renderTraslados(){
   $('panel-traslados').innerHTML=`<h2>Traslados ${tabNoteHtml('traslados')}</h2>
-  ${state.traslados.map(t=>`<div class="card${t.checked?' done':''}"><div class="card-row">
-    <div class="checkbox${t.checked?' checked':''}" onclick="toggleItem('traslados',${t.id})"></div>
-    <div class="card-body"><div class="item-name">${t.nombre}${t.checked?'<span class="selected-badge">Confirmado</span>':''}</div>
-    <div class="item-meta">${t.tipo?`<span class="badge badge-gray">${t.tipo}</span>`:''}
-    ${t.precio>0?`<span class="price-tag">$${fmt(t.precio)} ${t.precioPP===false?'total':'p/p'}</span>`:'<span class="traslado-pending">precio a cotizar</span>'}
-    ${t.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${t.notas}</span>`:''}</div></div>
-    <div class="card-actions"><button class="btn-icon" onclick="editTraslado(${t.id})"><i class="ti ti-edit"></i></button>
-    <button class="btn-icon" onclick="deleteItem('traslados',${t.id})"><i class="ti ti-trash"></i></button></div>
-  </div></div>`).join('')}
+  ${state.traslados.map(t=>{
+    const partic=t.participantes||[];
+    const hasSubset=partic.length>0&&partic.length<state.personas.length;
+    const expanded=_particExpanded.has('tr-'+t.id);
+    const partChips=state.personas.map(p=>{
+      const sel=!partic.length||partic.includes(p.id);
+      return`<button onclick="toggleTrasladoPartic(${t.id},${p.id})" style="padding:3px 10px;border-radius:12px;font-size:12px;cursor:pointer;border:1px solid ${sel?'#1D9E75':'var(--color-border-secondary)'};background:${sel?'#1D9E75':'var(--color-background-primary)'};color:${sel?'white':'var(--color-text-primary)'}">${p.nombre}</button>`;
+    }).join('');
+    return`<div class="card${t.checked?' done':''}">
+      <div class="card-row">
+        <div class="checkbox${t.checked?' checked':''}" onclick="toggleItem('traslados',${t.id})"></div>
+        <div class="card-body"><div class="item-name">${t.nombre}${t.checked?'<span class="selected-badge">Confirmado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
+        <div class="item-meta">${t.tipo?`<span class="badge badge-gray">${t.tipo}</span>`:''}
+        ${t.precio>0?`<span class="price-tag">$${fmt(t.precio)} ${t.precioPP===false?'total':'p/p'}</span>`:'<span class="traslado-pending">precio a cotizar</span>'}
+        ${t.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${t.notas}</span>`:''}</div></div>
+        <div class="card-actions">
+          ${state.personas.length>1?`<button class="btn-icon${hasSubset?' btn-icon-active':''}" onclick="toggleParticOpen('tr-${t.id}','traslados')" title="Participantes" style="${hasSubset?'color:#1D9E75':''}"><i class="ti ti-users"></i></button>`:''}
+          <button class="btn-icon" onclick="editTraslado(${t.id})"><i class="ti ti-edit"></i></button>
+          <button class="btn-icon" onclick="deleteItem('traslados',${t.id})"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>
+      ${expanded?`<div style="padding:.5rem .75rem .75rem;border-top:.5px solid var(--color-border-tertiary);margin-top:0">
+        <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px">¿Quiénes toman este traslado?</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${partChips}</div>
+      </div>`:''}
+    </div>`;
+  }).join('')}
   <button class="add-btn" onclick="addTraslado()"><i class="ti ti-plus"></i> Agregar traslado</button>`;
 }
 
@@ -1118,24 +1243,38 @@ function renderCustomTab(tabId){
         </div>
       </div>
       ${(s.items||[]).length===0?'<p style="font-size:12px;color:var(--color-text-tertiary);padding:.25rem 0 .75rem">Sin opciones aún.</p>':''}
-      ${(s.items||[]).map(item=>`<div class="card${item.checked?' done':''}">
-        <div class="card-row">
-          <div class="checkbox${item.checked?' checked':''}" onclick="toggleCustomItem('${tabId}','${s.id}',${item.id})"></div>
-          <div class="card-body">
-            <div class="item-name">${item.nombre}${item.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
-            <div class="item-meta">
-              ${item.descripcion?`<span style="color:var(--color-text-secondary)">${item.descripcion}</span>`:''}
-              ${item.precio?`<span class="price-tag">$${fmt(item.precio)}</span>`:''}
-              ${item.link?`<a href="${item.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
-              ${item.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${item.notas}</span>`:''}
+      ${(s.items||[]).map(item=>{
+        const partic=item.participantes||[];
+        const hasSubset=partic.length>0&&partic.length<state.personas.length;
+        const expanded=_particExpanded.has('ct-'+tabId+'-'+item.id);
+        const partChips=state.personas.map(p=>{
+          const sel=!partic.length||partic.includes(p.id);
+          return`<button onclick="toggleCustomItemPartic('${tabId}','${s.id}',${item.id},${p.id})" style="padding:3px 10px;border-radius:12px;font-size:12px;cursor:pointer;border:1px solid ${sel?'#1D9E75':'var(--color-border-secondary)'};background:${sel?'#1D9E75':'var(--color-background-primary)'};color:${sel?'white':'var(--color-text-primary)'}">${p.nombre}</button>`;
+        }).join('');
+        return`<div class="card${item.checked?' done':''}">
+          <div class="card-row">
+            <div class="checkbox${item.checked?' checked':''}" onclick="toggleCustomItem('${tabId}','${s.id}',${item.id})"></div>
+            <div class="card-body">
+              <div class="item-name">${item.nombre}${item.checked?'<span class="selected-badge">Seleccionado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
+              <div class="item-meta">
+                ${item.descripcion?`<span style="color:var(--color-text-secondary)">${item.descripcion}</span>`:''}
+                ${item.precio?`<span class="price-tag">$${fmt(item.precio)}</span>`:''}
+                ${item.link?`<a href="${item.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
+                ${item.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${item.notas}</span>`:''}
+              </div>
+            </div>
+            <div class="card-actions">
+              ${state.personas.length>1?`<button class="btn-icon${hasSubset?' btn-icon-active':''}" onclick="toggleParticOpen('ct-${tabId}-${item.id}','${tabId}')" title="Participantes" style="${hasSubset?'color:#1D9E75':''}"><i class="ti ti-users"></i></button>`:''}
+              <button class="btn-icon" onclick="formCustomItem('${tabId}','${s.id}',${item.id})"><i class="ti ti-edit"></i></button>
+              <button class="btn-icon" onclick="deleteCustomItem('${tabId}','${s.id}',${item.id})"><i class="ti ti-trash"></i></button>
             </div>
           </div>
-          <div class="card-actions">
-            <button class="btn-icon" onclick="formCustomItem('${tabId}','${s.id}',${item.id})"><i class="ti ti-edit"></i></button>
-            <button class="btn-icon" onclick="deleteCustomItem('${tabId}','${s.id}',${item.id})"><i class="ti ti-trash"></i></button>
-          </div>
-        </div>
-      </div>`).join('')}
+          ${expanded?`<div style="padding:.5rem .75rem .75rem;border-top:.5px solid var(--color-border-tertiary);margin-top:0">
+            <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px">¿Quiénes participan?</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">${partChips}</div>
+          </div>`:''}
+        </div>`;
+      }).join('')}
       <button class="add-btn" onclick="formCustomItem('${tabId}','${s.id}',null)"><i class="ti ti-plus"></i> Agregar opción</button>
     </div>`).join('')}
     <button class="add-btn" onclick="formCustomSection('${tabId}',null)"><i class="ti ti-plus"></i> Agregar sub-sección</button>`;
