@@ -174,6 +174,7 @@ const DEFAULT = {
   skiVisible: true,
   skiName: 'Ski & Equipo',
   skiDesc: '',
+  skiSections: {pase:'Pase de ski',equipo:'Alquiler de equipo',ropa:'Alquiler de ropa de nieve'},
   tabNotes: {}
 };
 
@@ -193,6 +194,7 @@ function migrateState(s){
   if(s.skiVisible===undefined)s.skiVisible=true;
   if(!s.skiName)s.skiName='Ski & Equipo';
   if(s.skiDesc===undefined)s.skiDesc='';
+  if(!s.skiSections)s.skiSections={pase:'Pase de ski',equipo:'Alquiler de equipo',ropa:'Alquiler de ropa de nieve'};
   if(!s.tabNotes)s.tabNotes={};
   return s;
 }
@@ -729,9 +731,10 @@ function renderHospedaje(){
   <button class="add-btn" onclick="addHosp()"><i class="ti ti-plus"></i> Agregar hospedaje</button>`;
 }
 
-function skiSection(key,title){
+function skiSection(key,defaultTitle){
+  const title=(state.skiSections||{})[key]||defaultTitle;
   const list=state.ski[key]||[];
-  return`<div style="margin-bottom:1.5rem"><div class="section-header"><h3>${title}</h3></div>
+  return`<div style="margin-bottom:1.5rem"><div class="section-header"><h3>${title}</h3><button class="btn-icon" onclick="editSkiSection('${key}')"><i class="ti ti-edit"></i></button></div>
   ${list.length===0?`<p style="font-size:12px;color:var(--color-text-tertiary);padding:.25rem 0 .5rem">Sin opciones cargadas. Usá <strong>+ Agregar opción</strong> para comparar alternativas.</p>`:''}
   ${list.map(item=>`<div class="card${item.checked?' done':''}"><div class="card-row">
     <div class="checkbox${item.checked?' checked':''}" onclick="toggleSki('${key}',${item.id})"></div>
@@ -1057,6 +1060,22 @@ function deleteSki(){
     state.skiVisible=true;saveState();renderTabs();
   },10000);
 }
+function editSkiSection(key){
+  const cur=(state.skiSections||{})[key]||'';
+  openModal(`<h3>Editar sub-sección</h3>
+    <div class="form-group"><label>Nombre</label><input id="ssk" value="${cur}"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveSkiSection('${key}')">Guardar</button>
+    </div>`);
+  setTimeout(()=>$('ssk')&&$('ssk').focus(),50);
+}
+function saveSkiSection(key){
+  if(!state.skiSections)state.skiSections={pase:'Pase de ski',equipo:'Alquiler de equipo',ropa:'Alquiler de ropa de nieve'};
+  const v=($('ssk').value||'').trim();
+  if(v)state.skiSections[key]=v;
+  saveState();closeModal();renderSki();
+}
 
 function renderCustomTab(tabId){
   const ct=(state.customTabs||[]).find(t=>t.id===tabId);
@@ -1105,10 +1124,10 @@ function renderCustomTab(tabId){
           <div class="card-body">
             <div class="item-name">${item.nombre}${item.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
             <div class="item-meta">
+              ${item.descripcion?`<span style="color:var(--color-text-secondary)">${item.descripcion}</span>`:''}
               ${item.precio?`<span class="price-tag">$${fmt(item.precio)}</span>`:''}
-              ${item.fecha?`<span>${fmtDate(item.fecha)}</span>`:''}
-              ${item.fechaFin&&item.fechaFin!==item.fecha?`<span>→ ${fmtDate(item.fechaFin)}</span>`:''}
-              ${item.notas?`<span>${item.notas}</span>`:''}
+              ${item.link?`<a href="${item.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
+              ${item.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${item.notas}</span>`:''}
             </div>
           </div>
           <div class="card-actions">
@@ -1238,16 +1257,12 @@ function formCustomItem(tabId,sectionId,itemId){
   const s=ct.secciones.find(s=>s.id===sectionId);if(!s)return;
   const isEdit=!!itemId;
   const item=isEdit?s.items.find(i=>i.id===itemId):null;
-  const e=item||{nombre:'',precio:'',fecha:'',fechaFin:'',notas:''};
+  const e=item||{nombre:'',descripcion:'',precio:'',link:'',notas:''};
   openModal(`<h3>${isEdit?'Editar':'Nueva'} opción — ${s.nombre}</h3>
     <div class="form-group"><label>Nombre</label><input id="cin" value="${e.nombre}" placeholder="ej: Hertz compact"></div>
-    <div class="form-row">
-      <div class="form-group"><label>Precio</label><input id="cip" type="number" value="${e.precio||''}" placeholder="0"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label>Fecha inicio</label><input id="cif" type="date" value="${e.fecha||''}"></div>
-      <div class="form-group"><label>Fecha fin</label><input id="ciff" type="date" value="${e.fechaFin||''}"></div>
-    </div>
+    <div class="form-group"><label>Descripción</label><input id="cid" value="${e.descripcion||''}" placeholder="opcional"></div>
+    <div class="form-group"><label>Precio (ARS)</label><input id="cip" type="number" value="${e.precio||''}" placeholder="0"></div>
+    <div class="form-group"><label>Link</label><input id="cil" value="${e.link||''}" placeholder="https://..."></div>
     <div class="form-group"><label>Notas</label><input id="cino" value="${e.notas||''}" placeholder="opcional"></div>
     <div class="modal-actions">
       ${isEdit?`<button class="btn-danger" onclick="deleteCustomItem('${tabId}','${sectionId}',${itemId});closeModal()">Eliminar</button>`:''}
@@ -1261,7 +1276,7 @@ function saveCustomItem(tabId,sectionId,itemId){
   const nombre=($('cin').value||'').trim();if(!nombre)return;
   const ct=(state.customTabs||[]).find(t=>t.id===tabId);if(!ct)return;
   const s=ct.secciones.find(s=>s.id===sectionId);if(!s)return;
-  const data={nombre,precio:parseFloat($('cip').value)||0,fecha:$('cif').value||'',fechaFin:$('ciff').value||'',notas:$('cino').value||''};
+  const data={nombre,descripcion:$('cid').value||'',precio:parseFloat($('cip').value)||0,link:$('cil').value||'',notas:$('cino').value||''};
   if(itemId){
     s.items=s.items.map(i=>i.id===itemId?{...i,...data}:i);
   } else {
