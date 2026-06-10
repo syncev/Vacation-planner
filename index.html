@@ -11,8 +11,8 @@
   --color-background-secondary: #0f1d2e;
   --color-background-tertiary: #070d1a;
   --color-text-primary: #dde5f0;
-  --color-text-secondary: #6a7e99;
-  --color-text-tertiary: #38485e;
+  --color-text-secondary: #96b0cc;
+  --color-text-tertiary: #5a7088;
   --color-border-tertiary: rgba(90,140,210,0.1);
   --color-border-secondary: rgba(90,140,210,0.18);
   --color-border-primary: rgba(90,140,210,0.34);
@@ -34,13 +34,17 @@ body::-webkit-scrollbar{display:none}
 .tab-add{padding:6px 10px;border:1px solid transparent;background:none;cursor:pointer;color:var(--color-text-tertiary);font-size:16px;line-height:1;border-radius:6px;font-family:var(--font-sans);transition:all .15s}
 .tab-add:hover{color:var(--color-text-secondary);background:rgba(90,140,210,0.08);border-color:rgba(90,140,210,0.15)}
 .tab{padding:6px 13px;border:1px solid transparent;background:none;cursor:pointer;font-size:13px;color:var(--color-text-secondary);white-space:nowrap;border-radius:6px;font-family:var(--font-sans);transition:all .15s}
-.tab.active{color:#1D9E75;background:rgba(29,158,117,0.1);border-color:rgba(29,158,117,0.38);box-shadow:0 0 12px rgba(29,158,117,0.13);font-weight:500}
+.tab.active{color:#00cce0;background:rgba(0,204,224,0.08);border-color:rgba(0,204,224,0.38);box-shadow:0 0 12px rgba(0,204,224,0.12);font-weight:500}
 .tab:hover:not(.active){color:var(--color-text-primary);background:rgba(90,140,210,0.07);border-color:rgba(90,140,210,0.14)}
 .panel{display:none}.panel.active{display:block}
 .card{background:rgba(11,19,33,0.82);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:.75rem;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 4px 24px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.03);transition:border-color .2s}
 .card:hover{border-color:rgba(90,140,210,0.2)}
 .card.done{opacity:1}
 .card.done .item-name{text-decoration:underline}
+.card.done .item-name > span{text-decoration:none}
+.card-price{flex-shrink:0;align-self:center;text-align:right;padding:0 4px 0 14px}
+.card-price-main{font-size:17px;font-weight:600;color:#00cce0;line-height:1.1;white-space:nowrap}
+.card-price-sub{font-size:10px;color:var(--color-text-secondary);margin-top:2px;white-space:nowrap}
 .card-row{display:flex;align-items:flex-start;gap:12px}
 .card-body{flex:1;min-width:0}
 .item-name{font-weight:500;font-size:14px;margin-bottom:4px;word-break:break-word}
@@ -51,7 +55,7 @@ body::-webkit-scrollbar{display:none}
 .badge-amber{background:rgba(175,95,15,0.2);color:#f0a050;border:.5px solid rgba(175,95,15,0.3)}
 .badge-gray{background:rgba(80,105,140,0.18);color:#8898b5;border:.5px solid rgba(80,105,140,0.26)}
 .badge-teal{background:rgba(0,155,150,0.17);color:#00c8b4;border:.5px solid rgba(0,155,150,0.28)}
-.price-tag{font-size:13px;font-weight:500;color:var(--color-text-primary);white-space:nowrap}
+.price-tag{font-size:13px;font-weight:500;color:#00cce0;white-space:nowrap}
 .card-actions{display:flex;gap:4px;flex-shrink:0;margin-top:2px}
 .btn-icon{background:none;border:none;cursor:pointer;padding:4px;border-radius:6px;color:var(--color-text-tertiary);line-height:1;font-size:16px;transition:all .15s}
 .btn-icon:hover{background:rgba(90,140,210,0.1);color:var(--color-text-primary)}
@@ -82,13 +86,15 @@ h3{font-size:15px;font-weight:500;margin-bottom:.75rem;color:var(--color-text-pr
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
 .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1.5rem}
 .metric-card{background:rgba(9,17,31,0.9);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:.875rem 1rem;backdrop-filter:blur(4px)}
+.metric-card-persona{border-color:rgba(205,158,38,0.6);box-shadow:0 0 16px rgba(205,158,38,0.1)}
 .metric-label{font-size:11px;color:var(--color-text-secondary);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
-.metric-value{font-size:22px;font-weight:500;color:var(--color-text-primary)}
+.metric-value{font-size:22px;font-weight:500;color:#00cce0}
+.metric-card-persona .metric-value{color:var(--color-text-primary)}
 .metric-sub{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
 .progress-bar{height:3px;background:rgba(90,140,210,0.12);border-radius:2px;margin:.5rem 0;overflow:hidden}
-.progress-fill{height:100%;background:linear-gradient(90deg,#1D9E75,#00d4a0);border-radius:2px;transition:width .3s;box-shadow:0 0 7px rgba(29,158,117,0.55)}
+.progress-fill{height:100%;background:linear-gradient(90deg,#0099bb,#00cce0);border-radius:2px;transition:width .3s;box-shadow:0 0 8px rgba(0,204,224,0.6)}
 .divider{height:.5px;background:rgba(90,140,210,0.08);margin:1.25rem 0}
-.link-text{color:#5aabda;font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:3px}
+.link-text{color:#1D9E75;font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:3px}
 .link-text:hover{text-decoration:underline}
 .selected-badge{font-size:10px;padding:2px 7px;border-radius:20px;background:rgba(29,158,117,0.15);color:#1D9E75;border:1px solid rgba(29,158,117,0.32);font-weight:500;margin-left:6px}
 .itinerary-day{border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:.75rem;background:rgba(11,19,33,0.65)}
@@ -644,6 +650,10 @@ function deletePersona(id){
   });
 }
 
+function itemPriceBlock(amount,sub=''){
+  if(!amount)return`<div class="card-price"><div class="card-price-main" style="color:var(--color-text-tertiary);font-size:13px">—</div></div>`;
+  return`<div class="card-price"><div class="card-price-main">$${fmt(amount)}</div>${sub?`<div class="card-price-sub">${sub}</div>`:''}</div>`;
+}
 function _perPersonRows(personas,fieldFn){
   return personas.map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:6px"><span style="font-size:12px;font-weight:600">${p.nombre}</span><span style="font-size:12px;font-weight:500;flex-shrink:0">${fieldFn(p)>0?'$'+fmt(fieldFn(p)):'—'}</span></div>`).join('');
 }
@@ -719,7 +729,7 @@ ${renderPersonas()}
   <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
 </div>
 <div class="summary-grid">
-  ${r.personas.map(p=>`<div class="metric-card">
+  ${r.personas.map(p=>`<div class="metric-card metric-card-persona">
     <div class="metric-label">Total ${p.nombre}</div>
     <div class="metric-value">${p.total>0?'$'+fmt(p.total):'—'}</div>
     <div class="metric-sub">${p.topExpense?'Mayor gasto: '+p.topExpense.label+(p.topExpense.detail?' · '+p.topExpense.detail:'')+(p.topExpense.date?' · '+p.topExpense.date:''):'Sin gastos confirmados'}</div>
@@ -755,7 +765,7 @@ function lineItem(label,name,price,tab){
   const isSet=price!==null;
   return`<div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .75rem;border-radius:var(--border-radius-md);background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary)">
     <div><span style="font-size:11px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.04em">${label}</span>
-    <div style="font-size:13px;${isSet?'':'color:var(--color-text-secondary)'}">${name}${!isSet?` <button onclick="switchTab('${tab}')" style="background:none;border:none;cursor:pointer;color:#185FA5;font-size:11px;font-family:var(--font-sans);padding:0">→ elegir</button>`:''}</div></div>
+    <div style="font-size:13px;${isSet?'':'color:var(--color-text-secondary)'}">${name}${!isSet?` <button onclick="switchTab('${tab}')" style="background:none;border:none;cursor:pointer;color:#1D9E75;font-size:11px;font-family:var(--font-sans);padding:0;font-weight:500">→ elegir</button>`:''}</div></div>
     ${isSet?`<div class="price-tag">$${fmt(price)}</div>`:`<div style="font-size:12px;color:var(--color-text-tertiary)">—</div>`}
   </div>`;
 }
@@ -778,8 +788,8 @@ function renderVuelos(){
         <div class="card-body"><div class="item-name">${v.nombre}${v.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
         <div class="item-meta">${v.aerolinea?`<span class="badge badge-gray">${v.aerolinea}</span>`:''}
         ${v.fechaIda?`<span>Ida: ${v.fechaIda}</span>`:''}${v.fechaVuelta?`<span>Vuelta: ${v.fechaVuelta}</span>`:''}
-        ${v.precio?`<span class="price-tag">$${fmt(v.precio)}</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">precio a cotizar</span>'}
         ${v.link?`<a href="${v.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}</div></div>
+        ${itemPriceBlock(v.precio||0)}
         <div class="card-actions"><button class="btn-icon" onclick="editVuelo(${p.id},${v.id})"><i class="ti ti-edit"></i></button>
         <button class="btn-icon" onclick="deleteVuelo(${p.id},${v.id})"><i class="ti ti-trash"></i></button></div>
       </div></div>`).join('')}
@@ -806,9 +816,9 @@ function renderHospedaje(){
         <div class="card-body"><div class="item-name">${h.nombre}${h.checked?'<span class="selected-badge">Seleccionado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
         <div class="item-meta"><span class="badge ${platformBadge(h.plataforma)}">${h.plataforma}</span>
         ${h.fechas?`<span>${h.fechas}</span>`:''}
-        ${h.precioTotal>1000?`<span class="price-tag">$${fmt(h.precioTotal)} total · $${fmt(Math.round(h.precioTotal/ppCount))} p/p</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">precio a consultar</span>'}
         ${h.link?`<a href="${h.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
         ${h.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${h.notas}</span>`:''}</div></div>
+        ${itemPriceBlock(h.precioTotal>1000?Math.round(h.precioTotal/ppCount):0,h.precioTotal>1000?'total $'+fmt(h.precioTotal):'')}
         <div class="card-actions">
           ${state.personas.length>1?`<button class="btn-icon${hasSubset?' btn-icon-active':''}" onclick="toggleParticOpen('h-${h.id}','hospedaje')" title="Participantes" style="${hasSubset?'color:#1D9E75':''}"><i class="ti ti-users"></i></button>`:''}
           <button class="btn-icon" onclick="editHosp(${h.id})"><i class="ti ti-edit"></i></button>
@@ -842,9 +852,9 @@ function skiSection(key,defaultTitle){
         <div class="checkbox${item.checked?' checked':''}" onclick="toggleSki('${key}',${item.id})"></div>
         <div class="card-body"><div class="item-name">${item.nombre}${item.checked?'<span class="selected-badge">Seleccionado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
         <div class="item-meta">${item.descripcion?`<span style="color:var(--color-text-secondary)">${item.descripcion}</span>`:''}
-        ${item.precio>0?`<span class="price-tag">$${fmt(item.precio)}</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">a consultar</span>'}
         ${item.link?`<a href="${item.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
         ${item.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${item.notas}</span>`:''}</div></div>
+        ${itemPriceBlock(item.precio>0?item.precio:0)}
         <div class="card-actions">
           ${state.personas.length>1?`<button class="btn-icon${hasSubset?' btn-icon-active':''}" onclick="toggleParticOpen('ski-${key}-${item.id}','ski')" title="Participantes" style="${hasSubset?'color:#1D9E75':''}"><i class="ti ti-users"></i></button>`:''}
           <button class="btn-icon" onclick="editSkiItem('${key}',${item.id})"><i class="ti ti-edit"></i></button>
@@ -902,9 +912,9 @@ function renderActividades(){
         <div class="card-body"><div class="item-name">${a.nombre}${a.checked?'<span class="selected-badge">Confirmado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
         <div class="item-meta">${a.tipo?`<span class="badge badge-gray">${a.tipo}</span>`:''}
         ${a.duracion?`<span>${a.duracion}</span>`:''}
-        ${a.precio>0?`<span class="price-tag">$${fmt(a.precio)}</span>`:'<span style="color:var(--color-text-tertiary);font-size:12px">precio a consultar</span>'}
         ${a.link?`<a href="${a.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
         ${a.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${a.notas}</span>`:''}</div></div>
+        ${itemPriceBlock(a.precio>0?a.precio:0)}
         <div class="card-actions">
           ${state.personas.length>1?`<button class="btn-icon${hasSubset?' btn-icon-active':''}" onclick="toggleActPartic(${a.id})" title="Participantes" style="${hasSubset?'color:#1D9E75':''}"><i class="ti ti-users"></i></button>`:''}
           <button class="btn-icon" onclick="editActividad(${a.id})"><i class="ti ti-edit"></i></button>
@@ -935,8 +945,8 @@ function renderTraslados(){
         <div class="checkbox${t.checked?' checked':''}" onclick="toggleItem('traslados',${t.id})"></div>
         <div class="card-body"><div class="item-name">${t.nombre}${t.checked?'<span class="selected-badge">Confirmado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
         <div class="item-meta">${t.tipo?`<span class="badge badge-gray">${t.tipo}</span>`:''}
-        ${t.precio>0?`<span class="price-tag">$${fmt(t.precio)} ${t.precioPP===false?'total':'p/p'}</span>`:'<span class="traslado-pending">precio a cotizar</span>'}
         ${t.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${t.notas}</span>`:''}</div></div>
+        ${itemPriceBlock(t.precio>0?t.precio:0,t.precio>0?(t.precioPP===false?'total':'p/p'):'')}
         <div class="card-actions">
           ${state.personas.length>1?`<button class="btn-icon${hasSubset?' btn-icon-active':''}" onclick="toggleParticOpen('tr-${t.id}','traslados')" title="Participantes" style="${hasSubset?'color:#1D9E75':''}"><i class="ti ti-users"></i></button>`:''}
           <button class="btn-icon" onclick="editTraslado(${t.id})"><i class="ti ti-edit"></i></button>
@@ -1262,11 +1272,11 @@ function renderCustomTab(tabId){
               <div class="item-name">${item.nombre}${item.checked?'<span class="selected-badge">Seleccionado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
               <div class="item-meta">
                 ${item.descripcion?`<span style="color:var(--color-text-secondary)">${item.descripcion}</span>`:''}
-                ${item.precio?`<span class="price-tag">$${fmt(item.precio)}</span>`:''}
                 ${item.link?`<a href="${item.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
                 ${item.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${item.notas}</span>`:''}
               </div>
             </div>
+            ${itemPriceBlock(item.precio>0?item.precio:0)}
             <div class="card-actions">
               ${state.personas.length>1?`<button class="btn-icon${hasSubset?' btn-icon-active':''}" onclick="toggleParticOpen('ct-${tabId}-${item.id}','${tabId}')" title="Participantes" style="${hasSubset?'color:#1D9E75':''}"><i class="ti ti-users"></i></button>`:''}
               <button class="btn-icon" onclick="formCustomItem('${tabId}','${s.id}',${item.id})"><i class="ti ti-edit"></i></button>
