@@ -37,7 +37,9 @@ body::-webkit-scrollbar{display:none}
 .tab.active{color:#041a10;background:#1D9E75;border-color:#1D9E75;box-shadow:0 0 14px rgba(29,158,117,0.4);font-weight:700}
 .tab:hover:not(.active){color:var(--color-text-primary);background:rgba(90,140,210,0.07);border-color:rgba(90,140,210,0.14)}
 .panel{display:none}.panel.active{display:block}
-.card{background:#2C343E;border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:.75rem;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 4px 24px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.03);transition:border-color .2s}
+.card{background:#2C343E;border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:.75rem;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 4px 24px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.03);transition:border-color .2s;overflow:hidden}
+.info-drop{max-height:0;overflow:hidden;opacity:0;transition:max-height .28s ease,opacity .22s ease}
+.info-drop.info-drop-open{max-height:800px;opacity:1}
 .card:hover{border-color:rgba(90,140,210,0.2)}
 .card.done{opacity:1}
 .card.done .item-name{text-decoration:underline}
@@ -123,7 +125,7 @@ h3{font-size:15px;font-weight:500;margin-bottom:.75rem;color:var(--color-text-pr
   <div id="app-title" class="app-title"></div>
   <div class="tabs" id="tabs">
     <button class="tab active" data-tab="resumen"><i class="ti ti-layout-dashboard"></i> Resumen</button>
-    <button class="tab" data-tab="vuelos"><i class="ti ti-plane"></i> Vuelos</button>
+    <button class="tab" data-tab="vuelos"><i class="ti ti-plane"></i> Embarques</button>
     <button class="tab" data-tab="hospedaje"><i class="ti ti-home"></i> Hospedaje</button>
     <button class="tab" data-tab="traslados"><i class="ti ti-car"></i> Traslados</button>
     <button class="tab" data-tab="actividades"><i class="ti ti-map"></i> Actividades</button>
@@ -180,7 +182,7 @@ function migrateState(s){
   }
   if(!s.personas)s.personas=[];
   if(!s.vuelos||Array.isArray(s.vuelos))s.vuelos={};
-  else Object.keys(s.vuelos).forEach(k=>{s.vuelos[k]=s.vuelos[k].map(v=>({descripcion:'',notas:'',...v}));});
+  else Object.keys(s.vuelos).forEach(k=>{s.vuelos[k]=s.vuelos[k].map(v=>({descripcion:'',notas:'',horaPartida:'',horaLlegada:'',tramos:[],...v,tramos:(v.tramos||[]).map(t=>({horaPartida:'',horaLlegada:'',...t}))}));});
   if(!s.tripName)s.tripName='Mi Viaje';
   if(s.tripDate===undefined)s.tripDate='';
   if(!s.ski)s.ski={dias:[],pase:[],equipo:[],ropa:[]};
@@ -233,6 +235,67 @@ function toggleParticipante(actId,personaId){
 }
 let _particExpanded=new Set();
 function toggleParticOpen(key,panel){_particExpanded.has(key)?_particExpanded.delete(key):_particExpanded.add(key);renderPanel(panel);}
+let _infoExpanded=new Set();
+function toggleInfoDrop(key,panel){
+  const el=document.querySelector(`.info-drop[data-key="${key}"]`);
+  if(_infoExpanded.has(key)){
+    _infoExpanded.delete(key);
+    if(el)el.classList.remove('info-drop-open');
+    else renderPanel(panel);
+  } else {
+    _infoExpanded.add(key);
+    if(el)el.classList.add('info-drop-open');
+    else renderPanel(panel);
+  }
+}
+function _infoRow(r){return`<div style="display:flex;gap:.5rem;align-items:baseline;padding:.18rem 0"><span style="font-size:11px;color:rgba(255,255,255,0.45);min-width:80px;flex-shrink:0">${r.label}</span><span style="font-size:12px;color:${r.color||'#ffffff'}">${r.html||r.value}</span></div>`;}
+function infoDropHtml(key,rows,extra){
+  const f=rows.filter(r=>r.value!==undefined&&r.value!==null&&r.value!==''&&r.value!==0&&r.value!==false);
+  if(!f.length&&!extra)return'';
+  const isOpen=_infoExpanded.has(key);
+  return`<div class="info-drop${isOpen?' info-drop-open':''}" data-key="${key}"><div style="padding:.875rem 0 .25rem;border-top:1px solid var(--color-border-tertiary)">${f.map(_infoRow).join('')}${extra||''}</div></div>`;
+}
+function vuMetaHtml(v){
+  const fd=d=>/^\d{4}-\d{2}-\d{2}$/.test(d)?fmtDate(d):d;
+  const p=[];
+  if(v.descripcion)p.push(`<span style="color:var(--color-text-secondary)">${v.descripcion}</span>`);
+  if(v.fechaIda)p.push(`<span>Ida: ${fd(v.fechaIda)}${v.horaPartida?' '+v.horaPartida:''}</span>`);
+  if(v.fechaVuelta)p.push(`<span>Vuelta: ${fd(v.fechaVuelta)}${v.horaLlegada?' '+v.horaLlegada:''}</span>`);
+  if(v.notas)p.push(`<span style="color:var(--color-text-secondary);font-style:italic">${v.notas}</span>`);
+  (v.tramos||[]).forEach(t=>{
+    const tp=[];
+    if(t.descripcion)tp.push(`<span style="color:var(--color-text-secondary)">${t.descripcion}</span>`);
+    if(t.fechaIda)tp.push(`<span>Ida: ${fd(t.fechaIda)}${t.horaPartida?' '+t.horaPartida:''}</span>`);
+    if(t.notas)tp.push(`<span style="color:var(--color-text-secondary);font-style:italic">${t.notas}</span>`);
+    if(tp.length){p.push(`<span style="color:#22d685;font-weight:700;padding:0 2px">|</span>`);p.push(...tp);}
+  });
+  if(!p.length)return'';
+  return`<div class="item-meta">${p.join('')}</div>`;
+}
+function vuInfoDrop(key,v){
+  const fd=d=>/^\d{4}-\d{2}-\d{2}$/.test(d)?fmtDate(d):d;
+  const rows=[];
+  if(v.descripcion)rows.push({label:'Descripción',value:v.descripcion});
+  if(v.aerolinea)rows.push({label:'Empresa',value:v.aerolinea});
+  if(v.fechaIda)rows.push({label:'Ida',value:fd(v.fechaIda)+(v.horaPartida?' · '+v.horaPartida:'')});
+  if(v.fechaVuelta)rows.push({label:'Vuelta',value:fd(v.fechaVuelta)+(v.horaLlegada?' · '+v.horaLlegada:'')});
+  if(v.precio)rows.push({label:'Precio',value:'$'+fmt(v.precio),color:'#22d685'});
+  if(v.link)rows.push({label:'Link',html:`<a href="${v.link}" target="_blank" style="color:#00cce0;text-decoration:none;word-break:break-all">${v.link}</a>`,value:'_'});
+  if(v.notas)rows.push({label:'Notas',value:v.notas});
+  const tramosExtra=(v.tramos||[]).map((t,i)=>{
+    const tr=[];
+    if(t.nombre)tr.push({label:'Nombre',value:t.nombre});
+    if(t.aerolinea)tr.push({label:'Empresa',value:t.aerolinea});
+    if(t.fechaIda)tr.push({label:'Ida',value:fd(t.fechaIda)+(t.horaPartida?' · '+t.horaPartida:'')});
+    if(t.horaLlegada)tr.push({label:'Llegada',value:t.horaLlegada});
+    if(t.precio)tr.push({label:'Precio',value:'$'+fmt(t.precio),color:'#22d685'});
+    if(t.notas)tr.push({label:'Notas',value:t.notas});
+    if(t.link)tr.push({label:'Link',html:`<a href="${t.link}" target="_blank" style="color:#00cce0;text-decoration:none">${t.link}</a>`,value:'_'});
+    const filtered=tr.filter(r=>r.value);if(!filtered.length)return'';
+    return`<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--color-border-tertiary)"><div style="font-size:10px;color:#22d685;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.25rem">Conexión ${i+2}</div>${filtered.map(_infoRow).join('')}</div>`;
+  }).join('');
+  return infoDropHtml(key,rows,tramosExtra);
+}
 function _applyParticToggle(item,personaId){
   const all=state.personas.map(p=>p.id);
   if(!(item.participantes||[]).length){
@@ -300,17 +363,25 @@ function fmtDate(iso){
 
 function buildItinerary(){
   const byDate={};
+  function addEvent(fecha,ev){if(!fecha)return;if(!byDate[fecha])byDate[fecha]=[];byDate[fecha].push(ev);}
   (state.ski.dias||[]).forEach(d=>{
-    if(!d.fecha)return;
-    if(!byDate[d.fecha])byDate[d.fecha]=[];
-    byDate[d.fecha].push({icon:'ti-mountain',label:'Ski — Cerro Catedral',note:d.notas||''});
+    addEvent(d.fecha,{icon:'ti-mountain',label:'Ski — Cerro Catedral',note:d.notas||'',time:''});
   });
   state.actividades.forEach(a=>{
-    if(!a.fecha)return;
-    if(!byDate[a.fecha])byDate[a.fecha]=[];
     const note=a.fechaFin?`Hasta el ${fmtDate(a.fechaFin)}`:(a.duracion||'');
-    byDate[a.fecha].push({icon:'ti-map',label:a.nombre,note,badge:a.tipo});
+    addEvent(a.fecha,{icon:'ti-map',label:a.nombre,note,badge:a.tipo,time:''});
   });
+  state.personas.forEach(p=>{
+    (state.vuelos[String(p.id)]||[]).forEach(v=>{
+      const vNote=[v.horaPartida,v.horaLlegada].filter(Boolean).join(' → ');
+      addEvent(v.fechaIda,{icon:'ti-plane-departure',label:v.nombre,note:vNote,badge:p.nombre,time:v.horaPartida||''});
+      (v.tramos||[]).forEach(t=>{
+        const tNote=[t.horaPartida,t.horaLlegada].filter(Boolean).join(' → ');
+        addEvent(t.fechaIda,{icon:'ti-plane-departure',label:t.nombre,note:tNote,badge:p.nombre,time:t.horaPartida||''});
+      });
+    });
+  });
+  Object.keys(byDate).forEach(d=>{byDate[d].sort((a,b)=>{if(!a.time&&!b.time)return 0;if(!a.time)return 1;if(!b.time)return -1;return a.time.localeCompare(b.time);});});
   const sortedDates=Object.keys(byDate).sort();
   const undatedSki=(state.ski.dias||[]).filter(d=>!d.fecha);
   const undatedAct=state.actividades.filter(a=>!a.fecha);
@@ -492,6 +563,26 @@ function clearDateField(id){
   if(xBtn){xBtn.style.opacity='0';xBtn.style.pointerEvents='none';}
   closeInlineCal();
 }
+function _updateTimeField(id){
+  const h=document.getElementById(id+'-h')?.value||'';
+  const m=document.getElementById(id+'-m')?.value||'';
+  const el=document.getElementById(id);
+  if(el)el.value=(h&&m)?h+':'+m:'';
+}
+function timeSelectHtml(id,value,label){
+  const [hPart,mPart]=(value||'').split(':');
+  const h=hPart||'';const m=mPart||'';
+  const hours=Array.from({length:24},(_,i)=>{const v=String(i).padStart(2,'0');return`<option value="${v}"${h===v?' selected':''}>${v}</option>`;}).join('');
+  const mins=Array.from({length:12},(_,i)=>{const v=String(i*5).padStart(2,'0');return`<option value="${v}"${m===v?' selected':''}>${v}</option>`;}).join('');
+  return`<div class="form-group"><label>${label}</label>
+    <div style="display:flex;align-items:center;gap:4px">
+      <select id="${id}-h" onchange="_updateTimeField('${id}')" style="flex:1"><option value="">HH</option>${hours}</select>
+      <span style="color:var(--color-text-secondary);font-weight:500">:</span>
+      <select id="${id}-m" onchange="_updateTimeField('${id}')" style="flex:1"><option value="">MM</option>${mins}</select>
+      <input type="hidden" id="${id}" value="${value||''}">
+    </div>
+  </div>`;
+}
 function dateFieldHtml(id,value,label){
   const isIso=/^\d{4}-\d{2}-\d{2}$/.test(value||'');
   const display=isIso?fmtDate(value):(value||'— elegir fecha —');
@@ -646,7 +737,7 @@ function calcResumen(){
 
   const personas=state.personas.map(p=>{
     const vuelosChecked=(state.vuelos[String(p.id)]||[]).filter(v=>v.checked);
-    const vueloTotal=vuelosChecked.reduce((s,v)=>s+(v.precio||0),0);
+    const vueloTotal=vuelosChecked.reduce((s,v)=>s+(v.precio||0)+(v.tramos||[]).reduce((ts,t)=>ts+(t.precio||0),0),0);
     const actForMe=actChecked.filter(a=>!(a.participantes||[]).length||(a.participantes||[]).includes(p.id)).reduce((s,a)=>s+(a.precio||0),0);
     const hospForMe=hospForPerson(p.id);
     const skiForMe=skiForPerson(p.id);
@@ -658,8 +749,8 @@ function calcResumen(){
     const mySki=skiItems.filter(i=>{const pa=i.participantes||[];return !pa.length||pa.includes(p.id);});
     const myTraslados=trasladosChecked.filter(t=>{const pa=t.participantes||[];return !pa.length||pa.includes(p.id);});
     const expenses=[
-      {label:'Vuelo',amount:vueloTotal,
-       detail:vuelosChecked.length>1?vuelosChecked.length+' vuelos':(vuelosChecked[0]?.nombre||''),
+      {label:'Embarque',amount:vueloTotal,
+       detail:vuelosChecked.length>1?vuelosChecked.length+' embarques':(vuelosChecked[0]?.nombre||''),
        date:vuelosChecked[0]?.fechaIda||vuelosChecked[0]?.fechaVuelta||''},
       {label:'Hospedaje',amount:hospForMe,
        detail:myHosp.length>1?myHosp.length+' hospedajes':(myHosp[0]?.nombre||''),
@@ -835,7 +926,7 @@ ${renderPersonas()}
     <div class="metric-sub">${p.topExpense?'Mayor gasto: '+p.topExpense.label+(p.topExpense.detail?' · '+p.topExpense.detail:'')+(p.topExpense.date?' · '+p.topExpense.date:''):'Sin gastos confirmados'}</div>
   </div>`).join('')}
   ${r.personas.some(p=>p.vuelosChecked.length>0)?`<div class="metric-card" onclick="switchTab('vuelos')" style="${_mcNav}">
-    <div class="metric-label">Vuelos</div>
+    <div class="metric-label">Embarques</div>
     ${r.personas.filter(p=>p.vuelosChecked.length>0).map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:6px"><span style="font-size:12px;font-weight:600">${p.nombre}</span><span style="font-size:12px;font-weight:500;flex-shrink:0">$${fmt(p.vueloTotal)}</span></div>`).join('')}
   </div>`:''}
   ${r.hospChecked.length>0?hospMetricCard(r):''}
@@ -847,7 +938,7 @@ ${renderPersonas()}
 <div class="divider"></div>
 <h3>Opciones seleccionadas</h3>
 <div style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.25rem">
-${r.personas.map(p=>p.vuelosChecked.length===0?lineItem('Vuelo '+p.nombre,'Sin seleccionar',null,'vuelos'):p.vuelosChecked.map(v=>lineItem('Vuelo '+p.nombre,v.nombre,v.precio,'vuelos')).join('')).join('')}
+${r.personas.map(p=>p.vuelosChecked.length===0?lineItem('Embarque '+p.nombre,'Sin seleccionar',null,'vuelos'):p.vuelosChecked.map(v=>lineItem('Embarque '+p.nombre,v.nombre,(v.precio||0)+(v.tramos||[]).reduce((s,t)=>s+(t.precio||0),0),'vuelos')).join('')).join('')}
 ${r.hospChecked.length===0?lineItem('Hospedaje (p/p)','Sin seleccionar',null,'hospedaje'):r.hospChecked.map(h=>lineItem('Hospedaje (p/p)',h.nombre,Math.round(h.precioTotal/r.n),'hospedaje')).join('')}
 ${r.pases.length===0?lineItem('Pase ski','Sin seleccionar',null,'ski'):r.pases.map(i=>lineItem('Pase ski',i.nombre,i.precio,'ski')).join('')}
 ${r.equipos.length===0?lineItem('Equipo ski','Sin seleccionar',null,'ski'):r.equipos.map(i=>lineItem('Equipo ski',i.nombre,i.precio,'ski')).join('')}
@@ -882,23 +973,28 @@ function renderVuelos(){
     const list=state.vuelos[String(p.id)]||[];
     return`<div style="margin-bottom:1.5rem">
       <div class="section-header"><h3>${p.nombre}${p.origen?` <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">desde ${p.origen}</span>`:''}</h3></div>
-      ${list.length===0?'<p style="font-size:12px;color:var(--color-text-tertiary);padding:.5rem 0">Sin opciones de vuelo aún.</p>':''}
-      ${list.map(v=>`<div class="card${v.checked?' done':''}"><div class="card-row">
-        <div class="checkbox${v.checked?' checked':''}" onclick="toggleVuelo(${p.id},${v.id})"></div>
-        <div class="card-body"><div class="item-name">${v.nombre}${v.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
-        <div class="item-meta">${v.descripcion?`<span style="color:var(--color-text-secondary)">${v.descripcion}</span>`:''}
-        ${v.aerolinea?`<span class="badge badge-gray">${v.aerolinea}</span>`:''}
-        ${v.fechaIda?`<span>Ida: ${/^\d{4}-\d{2}-\d{2}$/.test(v.fechaIda)?fmtDate(v.fechaIda):v.fechaIda}</span>`:''}${v.fechaVuelta?`<span>Vuelta: ${/^\d{4}-\d{2}-\d{2}$/.test(v.fechaVuelta)?fmtDate(v.fechaVuelta):v.fechaVuelta}</span>`:''}
-        ${v.link?`<a href="${v.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
-        ${v.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${v.notas}</span>`:''}</div></div>
-        ${itemPriceBlock(v.precio||0)}
-        <div class="card-actions"><button class="btn-icon" onclick="editVuelo(${p.id},${v.id})"><i class="ti ti-edit"></i></button>
-        <button class="btn-icon" onclick="deleteVuelo(${p.id},${v.id})"><i class="ti ti-trash"></i></button></div>
-      </div></div>`).join('')}
-      <button class="add-btn" onclick="addVuelo(${p.id})"><i class="ti ti-plus"></i> Agregar opción de vuelo</button>
+      ${list.length===0?'<p style="font-size:12px;color:var(--color-text-tertiary);padding:.5rem 0">Sin opciones de embarque aún.</p>':''}
+      ${list.map(v=>{
+        const vKey='vu-'+p.id+'-'+v.id;
+        const vDrop=vuInfoDrop(vKey,v);
+        return`<div class="card${v.checked?' done':''}"><div class="card-row" onclick="toggleInfoDrop('${vKey}','vuelos')" style="cursor:pointer">
+          <div class="checkbox${v.checked?' checked':''}" onclick="toggleVuelo(${p.id},${v.id});event.stopPropagation()"></div>
+          <div class="card-body">
+            <div class="item-name">${v.nombre}${v.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
+            ${vuMetaHtml(v)}
+          </div>
+          ${vueloPriceBlock(v)}
+          <div class="card-actions" onclick="event.stopPropagation()">
+            ${v.link?`<button class="btn-icon" onclick="window.open('${v.link}','_blank')" title="Abrir link"><i class="ti ti-external-link"></i></button>`:''}
+            <button class="btn-icon" onclick="editVuelo(${p.id},${v.id})"><i class="ti ti-edit"></i></button>
+            <button class="btn-icon" onclick="deleteVuelo(${p.id},${v.id})"><i class="ti ti-trash"></i></button>
+          </div>
+        </div>${vDrop}</div>`;
+      }).join('')}
+      <button class="add-btn" onclick="addVuelo(${p.id})"><i class="ti ti-plus"></i> Agregar embarque</button>
     </div>`;
   });
-  $('panel-vuelos').innerHTML=`<h2>Vuelos ${tabNoteHtml('vuelos')}</h2>${state.personas.length===0?'<p style="color:var(--color-text-secondary)">Agregá viajeros desde el Resumen para gestionar vuelos.</p>':sections.join('')}`;
+  $('panel-vuelos').innerHTML=`<h2>Embarques ${tabNoteHtml('vuelos')}</h2>${state.personas.length===0?'<p style="color:var(--color-text-secondary)">Agregá viajeros desde el Resumen para gestionar embarques.</p>':sections.join('')}`;
 }
 
 function renderHospedaje(){
@@ -912,21 +1008,31 @@ function renderHospedaje(){
       return`<button onclick="toggleHospPartic(${h.id},${p.id})" style="padding:3px 10px;border-radius:12px;font-size:12px;cursor:pointer;border:1px solid ${sel?'#1D9E75':'var(--color-border-secondary)'};background:${sel?'#1D9E75':'var(--color-background-primary)'};color:${sel?'white':'var(--color-text-primary)'}">${p.nombre}</button>`;
     }).join('');
     const ppCount=partic.length||Math.max(state.personas.length,1);
+    const hKey='h-'+h.id;
+    const hDrop=infoDropHtml(hKey,[
+      {label:'Plataforma',value:h.plataforma||''},
+      {label:'Check-in',value:h.fechaInicio?fmtDate(h.fechaInicio):(h.fechas||'')},
+      {label:'Check-out',value:h.fechaFin?fmtDate(h.fechaFin):''},
+      {label:'Total',value:h.precioTotal>0?'$'+fmt(h.precioTotal):'',color:'#22d685'},
+      {label:'Link',html:h.link?`<a href="${h.link}" target="_blank" style="color:#00cce0;text-decoration:none;word-break:break-all">${h.link}</a>`:'',value:h.link?'_':''},
+      {label:'Notas',value:h.notas||''},
+    ]);
     return`<div class="card${h.checked?' done':''}">
-      <div class="card-row">
-        <div class="checkbox${h.checked?' checked':''}" onclick="toggleItem('hospedaje',${h.id})"></div>
+      <div class="card-row" onclick="toggleInfoDrop('${hKey}','hospedaje')" style="cursor:pointer">
+        <div class="checkbox${h.checked?' checked':''}" onclick="toggleItem('hospedaje',${h.id});event.stopPropagation()"></div>
         <div class="card-body"><div class="item-name">${h.nombre}${h.checked?'<span class="selected-badge">Seleccionado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
         <div class="item-meta"><span class="badge ${platformBadge(h.plataforma)}">${h.plataforma}</span>
         ${h.fechaInicio?`<span>${fmtDate(h.fechaInicio)}${h.fechaFin?' – '+fmtDate(h.fechaFin):''}</span>`:h.fechas?`<span>${h.fechas}</span>`:''}
-        ${h.link?`<a href="${h.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
         ${h.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${h.notas}</span>`:''}</div></div>
         ${itemPriceBlock(h.precioTotal>1000?Math.round(h.precioTotal/ppCount):0,h.precioTotal>1000?'total $'+fmt(h.precioTotal):'')}
-        <div class="card-actions">
+        <div class="card-actions" onclick="event.stopPropagation()">
+          ${h.link?`<button class="btn-icon" onclick="window.open('${h.link}','_blank')" title="Abrir link"><i class="ti ti-external-link"></i></button>`:''}
           ${state.personas.length>1?`<button class="btn-icon${hasSubset?' btn-icon-active':''}" onclick="toggleParticOpen('h-${h.id}','hospedaje')" title="Participantes" style="${hasSubset?'color:#1D9E75':''}"><i class="ti ti-users"></i></button>`:''}
           <button class="btn-icon" onclick="editHosp(${h.id})"><i class="ti ti-edit"></i></button>
           <button class="btn-icon" onclick="deleteItem('hospedaje',${h.id})"><i class="ti ti-trash"></i></button>
         </div>
       </div>
+      ${hDrop}
       ${expanded?`<div style="padding:.5rem .75rem .75rem;border-top:.5px solid var(--color-border-tertiary);margin-top:0">
         <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px">¿Quiénes se hospedan aquí?</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">${partChips}</div>
@@ -949,20 +1055,28 @@ function skiSection(key,defaultTitle){
       const sel=!partic.length||partic.includes(p.id);
       return`<button onclick="toggleSkiItemPartic('${key}',${item.id},${p.id})" style="padding:3px 10px;border-radius:12px;font-size:12px;cursor:pointer;border:1px solid ${sel?'#1D9E75':'var(--color-border-secondary)'};background:${sel?'#1D9E75':'var(--color-background-primary)'};color:${sel?'white':'var(--color-text-primary)'}">${p.nombre}</button>`;
     }).join('');
+    const skiKey='ski-'+key+'-'+item.id;
+    const skiDrop=infoDropHtml(skiKey,[
+      {label:'Descripción',value:item.descripcion||''},
+      {label:'Precio',value:item.precio>0?'$'+fmt(item.precio):'',color:'#22d685'},
+      {label:'Link',html:item.link?`<a href="${item.link}" target="_blank" style="color:#00cce0;text-decoration:none;word-break:break-all">${item.link}</a>`:'',value:item.link?'_':''},
+      {label:'Notas',value:item.notas||''},
+    ]);
     return`<div class="card${item.checked?' done':''}">
-      <div class="card-row">
-        <div class="checkbox${item.checked?' checked':''}" onclick="toggleSki('${key}',${item.id})"></div>
+      <div class="card-row" onclick="toggleInfoDrop('${skiKey}','ski')" style="cursor:pointer">
+        <div class="checkbox${item.checked?' checked':''}" onclick="toggleSki('${key}',${item.id});event.stopPropagation()"></div>
         <div class="card-body"><div class="item-name">${item.nombre}${item.checked?'<span class="selected-badge">Seleccionado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
         <div class="item-meta">${item.descripcion?`<span style="color:var(--color-text-secondary)">${item.descripcion}</span>`:''}
-        ${item.link?`<a href="${item.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
         ${item.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${item.notas}</span>`:''}</div></div>
         ${itemPriceBlock(item.precio>0?item.precio:0)}
-        <div class="card-actions">
+        <div class="card-actions" onclick="event.stopPropagation()">
+          ${item.link?`<button class="btn-icon" onclick="window.open('${item.link}','_blank')" title="Abrir link"><i class="ti ti-external-link"></i></button>`:''}
           ${state.personas.length>1?`<button class="btn-icon${hasSubset?' btn-icon-active':''}" onclick="toggleParticOpen('ski-${key}-${item.id}','ski')" title="Participantes" style="${hasSubset?'color:#1D9E75':''}"><i class="ti ti-users"></i></button>`:''}
           <button class="btn-icon" onclick="editSkiItem('${key}',${item.id})"><i class="ti ti-edit"></i></button>
           <button class="btn-icon" onclick="deleteSkiItem('${key}',${item.id})"><i class="ti ti-trash"></i></button>
         </div>
       </div>
+      ${skiDrop}
       ${expanded?`<div style="padding:.5rem .75rem .75rem;border-top:.5px solid var(--color-border-tertiary);margin-top:0">
         <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px">¿Quiénes participan?</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">${partChips}</div>
@@ -1008,21 +1122,32 @@ function renderActividades(){
       const sel=!partic.length||partic.includes(p.id);
       return`<button onclick="toggleParticipante(${a.id},${p.id})" style="padding:3px 10px;border-radius:12px;font-size:12px;cursor:pointer;border:1px solid ${sel?'#1D9E75':'var(--color-border-secondary)'};background:${sel?'#1D9E75':'var(--color-background-primary)'};color:${sel?'white':'var(--color-text-primary)'}">${p.nombre}</button>`;
     }).join('');
+    const actKey='act-'+a.id;
+    const actDrop=infoDropHtml(actKey,[
+      {label:'Tipo',value:a.tipo||''},
+      {label:'Fecha',value:a.fecha?fmtDate(a.fecha):''},
+      {label:'Hasta',value:a.fechaFin?fmtDate(a.fechaFin):''},
+      {label:'Duración',value:a.duracion||''},
+      {label:'Precio',value:a.precio>0?'$'+fmt(a.precio):'',color:'#22d685'},
+      {label:'Link',html:a.link?`<a href="${a.link}" target="_blank" style="color:#00cce0;text-decoration:none;word-break:break-all">${a.link}</a>`:'',value:a.link?'_':''},
+      {label:'Notas',value:a.notas||''},
+    ]);
     return`<div class="card${a.checked?' done':''}">
-      <div class="card-row">
-        <div class="checkbox${a.checked?' checked':''}" onclick="toggleItem('actividades',${a.id})"></div>
+      <div class="card-row" onclick="toggleInfoDrop('${actKey}','actividades')" style="cursor:pointer">
+        <div class="checkbox${a.checked?' checked':''}" onclick="toggleItem('actividades',${a.id});event.stopPropagation()"></div>
         <div class="card-body"><div class="item-name">${a.nombre}${a.checked?'<span class="selected-badge">Confirmado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
         <div class="item-meta">${a.tipo?`<span class="badge badge-gray">${a.tipo}</span>`:''}
         ${a.duracion?`<span>${a.duracion}</span>`:''}
-        ${a.link?`<a href="${a.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
         ${a.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${a.notas}</span>`:''}</div></div>
         ${itemPriceBlock(a.precio>0?a.precio:0)}
-        <div class="card-actions">
+        <div class="card-actions" onclick="event.stopPropagation()">
+          ${a.link?`<button class="btn-icon" onclick="window.open('${a.link}','_blank')" title="Abrir link"><i class="ti ti-external-link"></i></button>`:''}
           ${state.personas.length>1?`<button class="btn-icon${hasSubset?' btn-icon-active':''}" onclick="toggleActPartic(${a.id})" title="Participantes" style="${hasSubset?'color:#1D9E75':''}"><i class="ti ti-users"></i></button>`:''}
           <button class="btn-icon" onclick="editActividad(${a.id})"><i class="ti ti-edit"></i></button>
           <button class="btn-icon" onclick="deleteItem('actividades',${a.id})"><i class="ti ti-trash"></i></button>
         </div>
       </div>
+      ${actDrop}
       ${expanded?`<div style="padding:.5rem .75rem .75rem;border-top:.5px solid var(--color-border-tertiary);margin-top:0">
         <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px">¿Quiénes participan?</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">${partChips}</div>
@@ -1042,20 +1167,28 @@ function renderTraslados(){
       const sel=!partic.length||partic.includes(p.id);
       return`<button onclick="toggleTrasladoPartic(${t.id},${p.id})" style="padding:3px 10px;border-radius:12px;font-size:12px;cursor:pointer;border:1px solid ${sel?'#1D9E75':'var(--color-border-secondary)'};background:${sel?'#1D9E75':'var(--color-background-primary)'};color:${sel?'white':'var(--color-text-primary)'}">${p.nombre}</button>`;
     }).join('');
+    const trKey='trasl-'+t.id;
+    const trDrop=infoDropHtml(trKey,[
+      {label:'Tipo',value:t.tipo||''},
+      {label:'Fecha',value:t.fecha?fmtDate(t.fecha):''},
+      {label:'Precio',value:t.precio>0?'$'+fmt(t.precio)+' '+(t.precioPP===false?'total':'p/p'):'',color:'#22d685'},
+      {label:'Notas',value:t.notas||''},
+    ]);
     return`<div class="card${t.checked?' done':''}">
-      <div class="card-row">
-        <div class="checkbox${t.checked?' checked':''}" onclick="toggleItem('traslados',${t.id})"></div>
+      <div class="card-row" onclick="toggleInfoDrop('${trKey}','traslados')" style="cursor:pointer">
+        <div class="checkbox${t.checked?' checked':''}" onclick="toggleItem('traslados',${t.id});event.stopPropagation()"></div>
         <div class="card-body"><div class="item-name">${t.nombre}${t.checked?'<span class="selected-badge">Confirmado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
         <div class="item-meta">${t.tipo?`<span class="badge badge-gray">${t.tipo}</span>`:''}
         ${t.fecha?`<span>${fmtDate(t.fecha)}</span>`:''}
         ${t.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${t.notas}</span>`:''}</div></div>
         ${itemPriceBlock(t.precio>0?t.precio:0,t.precio>0?(t.precioPP===false?'total':'p/p'):'')}
-        <div class="card-actions">
+        <div class="card-actions" onclick="event.stopPropagation()">
           ${state.personas.length>1?`<button class="btn-icon${hasSubset?' btn-icon-active':''}" onclick="toggleParticOpen('tr-${t.id}','traslados')" title="Participantes" style="${hasSubset?'color:#1D9E75':''}"><i class="ti ti-users"></i></button>`:''}
           <button class="btn-icon" onclick="editTraslado(${t.id})"><i class="ti ti-edit"></i></button>
           <button class="btn-icon" onclick="deleteItem('traslados',${t.id})"><i class="ti ti-trash"></i></button>
         </div>
       </div>
+      ${trDrop}
       ${expanded?`<div style="padding:.5rem .75rem .75rem;border-top:.5px solid var(--color-border-tertiary);margin-top:0">
         <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px">¿Quiénes toman este traslado?</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">${partChips}</div>
@@ -1111,20 +1244,88 @@ function toggleSki(key,id){state.ski[key]=state.ski[key].map(i=>({...i,checked:i
 
 $('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay'))closeModal();});
 
+// ── Multi-leg (tramos) ────────────────────────────────────────────────────────
+let _editTramos=[];
+function saveTramoFields(){
+  _editTramos=_editTramos.map((_,i)=>({
+    nombre:document.getElementById('tr'+i+'-n')?.value||'',
+    descripcion:document.getElementById('tr'+i+'-d')?.value||'',
+    aerolinea:document.getElementById('tr'+i+'-a')?.value||'',
+    fechaIda:document.getElementById('tr'+i+'-fi')?.value||'',
+    horaPartida:document.getElementById('tr'+i+'-hp')?.value||'',
+    horaLlegada:document.getElementById('tr'+i+'-hl')?.value||'',
+    precio:parseFloat(document.getElementById('tr'+i+'-p')?.value)||0,
+    link:document.getElementById('tr'+i+'-l')?.value||'',
+    notas:document.getElementById('tr'+i+'-no')?.value||'',
+  }));
+}
+function renderTramosSection(){
+  const items=_editTramos.map((t,i)=>`
+    <div style="border:1px solid rgba(90,140,210,0.2);border-radius:8px;padding:.75rem;margin-bottom:.5rem;background:rgba(6,12,24,0.4)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+        <span style="font-size:11px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.04em">Tramo ${i+2}</span>
+        <button type="button" class="btn-icon" onclick="removeTramo(${i})" title="Eliminar"><i class="ti ti-x" style="font-size:14px"></i></button>
+      </div>
+      <div class="form-group"><label>Nombre</label><input id="tr${i}-n" value="${t.nombre||''}"></div>
+      <div class="form-group"><label>Descripción</label><input id="tr${i}-d" value="${t.descripcion||''}" placeholder="ej: Bs As → Bariloche"></div>
+      <div class="form-group"><label>Aerolínea / Empresa</label><input id="tr${i}-a" value="${t.aerolinea||''}"></div>
+      ${dateFieldHtml('tr'+i+'-fi',t.fechaIda||'','Fecha')}
+      <div class="form-row">
+        <div>${timeSelectHtml('tr'+i+'-hp',t.horaPartida||'','Hora de partida')}</div>
+        <div>${timeSelectHtml('tr'+i+'-hl',t.horaLlegada||'','Hora de llegada')}</div>
+      </div>
+      <div class="form-group"><label>Precio (ARS)</label><input id="tr${i}-p" type="number" value="${t.precio||0}"></div>
+      <div class="form-group"><label>Link</label><input id="tr${i}-l" value="${t.link||''}" placeholder="https://..."></div>
+      <div class="form-group"><label>Notas</label><textarea id="tr${i}-no">${t.notas||''}</textarea></div>
+    </div>`).join('');
+  return items+`<button type="button" class="add-btn" onclick="addTramo()" style="margin-top:.25rem"><i class="ti ti-plus"></i> ${_editTramos.length?'Agregar otro tramo':'Agregar tramo de conexión'}</button>`;
+}
+function addTramo(){
+  saveTramoFields();
+  _editTramos.push({nombre:'',descripcion:'',aerolinea:'',fechaIda:'',precio:0,link:'',notas:''});
+  const sec=document.getElementById('tramos-section');if(sec)sec.innerHTML=renderTramosSection();
+}
+function removeTramo(idx){
+  saveTramoFields();_editTramos.splice(idx,1);
+  const sec=document.getElementById('tramos-section');if(sec)sec.innerHTML=renderTramosSection();
+}
+function vueloPriceBlock(v){
+  const tramos=v.tramos||[];
+  const total=(v.precio||0)+tramos.reduce((s,t)=>s+(t.precio||0),0);
+  if(!tramos.length)return itemPriceBlock(v.precio||0);
+  const legs=[{empresa:v.aerolinea||v.nombre,precio:v.precio||0},...tramos.map(t=>({empresa:t.aerolinea||t.nombre,precio:t.precio||0}))];
+  const breakdown=legs.map(l=>`<div style="display:flex;gap:8px;align-items:baseline;justify-content:flex-end;white-space:nowrap">
+      <span style="font-size:11px;color:var(--color-text-secondary);max-width:120px;overflow:hidden;text-overflow:ellipsis">${l.empresa}</span>
+      <span style="font-size:11px;color:#22d685;font-weight:500;flex-shrink:0">$${fmt(l.precio)}</span>
+    </div>`).join('');
+  return`<div class="card-price" style="display:flex;align-items:flex-end;gap:12px">
+    <div style="text-align:right">${breakdown}</div>
+    <div style="flex-shrink:0;text-align:right"><div class="card-price-main" style="font-size:18px">$${fmt(total)}</div></div>
+  </div>`;
+}
+
 function formVuelo(personaId,v){
   const p=state.personas.find(p=>p.id===personaId);
-  const isEdit=!!v;v=v||{nombre:'',descripcion:'',aerolinea:'',fechaIda:'',fechaVuelta:'',precio:'',link:'',notas:''};
-  openModal(`<h3>${isEdit?'Editar vuelo':'Nuevo vuelo'} — ${p?p.nombre:''}</h3>
+  const isEdit=!!v;v=v||{nombre:'',descripcion:'',aerolinea:'',fechaIda:'',fechaVuelta:'',precio:'',link:'',notas:'',tramos:[]};
+  _editTramos=[...(v.tramos||[])];
+  openModal(`<h3>${isEdit?'Editar embarque':'Nuevo embarque'} — ${p?p.nombre:''}</h3>
+    <div style="font-size:11px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">Tramo 1</div>
     <div class="form-group"><label>Nombre</label><input id="fn" value="${v.nombre}"></div>
     <div class="form-group"><label>Descripción</label><input id="fdesc" value="${v.descripcion||''}" placeholder="ej: Rosario → Bs As → Bariloche"></div>
-    <div class="form-group"><label>Aerolínea</label><input id="fa" value="${v.aerolinea}"></div>
+    <div class="form-group"><label>Aerolínea / Empresa</label><input id="fa" value="${v.aerolinea}"></div>
     <div class="form-row">
       <div>${dateFieldHtml('fi',v.fechaIda||'','Fecha ida')}</div>
       <div>${dateFieldHtml('fv',v.fechaVuelta||'','Fecha vuelta')}</div>
     </div>
+    <div class="form-row">
+      <div>${timeSelectHtml('fhp',v.horaPartida||'','Hora de partida')}</div>
+      <div>${timeSelectHtml('fhl',v.horaLlegada||'','Hora de llegada')}</div>
+    </div>
     <div class="form-group"><label>Precio (ARS)</label><input id="fp" type="number" value="${v.precio}"></div>
     <div class="form-group"><label>Link</label><input id="fl" value="${v.link}" placeholder="https://..."></div>
     <div class="form-group"><label>Notas</label><textarea id="fnotas" placeholder="Escalas, horarios, equipaje...">${v.notas||''}</textarea></div>
+    <div class="divider" style="margin:.75rem 0"></div>
+    <div id="tramos-section">${renderTramosSection()}</div>
     <div class="modal-actions">${isEdit?`<button class="btn-danger" onclick="deleteVuelo(${personaId},${v.id});closeModal()">Eliminar</button>`:''}
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
     <button class="btn-primary" onclick="saveVuelo(${personaId},${isEdit?v.id:0})">Guardar</button></div>`);
@@ -1132,9 +1333,10 @@ function formVuelo(personaId,v){
 function addVuelo(personaId){formVuelo(personaId,null);}
 function editVuelo(personaId,id){formVuelo(personaId,(state.vuelos[String(personaId)]||[]).find(v=>v.id===id));}
 function saveVuelo(personaId,id){
+  saveTramoFields();
   const k=String(personaId);
   if(!state.vuelos[k])state.vuelos[k]=[];
-  const n={nombre:$('fn').value,descripcion:$('fdesc').value.trim(),aerolinea:$('fa').value,fechaIda:$('fi').value,fechaVuelta:$('fv').value,precio:parseFloat($('fp').value)||0,link:$('fl').value,notas:$('fnotas').value.trim(),checked:false};
+  const n={nombre:$('fn').value,descripcion:$('fdesc').value.trim(),aerolinea:$('fa').value,fechaIda:$('fi').value,fechaVuelta:$('fv').value,horaPartida:$('fhp').value||'',horaLlegada:$('fhl').value||'',precio:parseFloat($('fp').value)||0,link:$('fl').value,notas:$('fnotas').value.trim(),tramos:_editTramos,checked:false};
   if(id){state.vuelos[k]=state.vuelos[k].map(v=>v.id===id?{...v,...n,id}:v);}else{state.vuelos[k].push({...n,id:nextId(state.vuelos[k])});}
   saveState();closeModal();renderVuelos();renderResumen();
 }
@@ -1144,7 +1346,7 @@ function deleteVuelo(personaId,id){
   const item=arr.find(v=>v.id===id);const idx=arr.findIndex(v=>v.id===id);
   state.vuelos[k]=arr.filter(v=>v.id!==id);
   saveState();renderVuelos();renderResumen();
-  showUndoToast(`"${item.aerolinea||'Vuelo'}" eliminado`,()=>{
+  showUndoToast(`"${item.aerolinea||item.nombre||'Embarque'}" eliminado`,()=>{
     if(!state.vuelos[k])state.vuelos[k]=[];
     state.vuelos[k].splice(Math.min(idx,state.vuelos[k].length),0,item);
     saveState();renderVuelos();renderResumen();
@@ -1379,24 +1581,32 @@ function renderCustomTab(tabId){
           const sel=!partic.length||partic.includes(p.id);
           return`<button onclick="toggleCustomItemPartic('${tabId}','${s.id}',${item.id},${p.id})" style="padding:3px 10px;border-radius:12px;font-size:12px;cursor:pointer;border:1px solid ${sel?'#1D9E75':'var(--color-border-secondary)'};background:${sel?'#1D9E75':'var(--color-background-primary)'};color:${sel?'white':'var(--color-text-primary)'}">${p.nombre}</button>`;
         }).join('');
+        const ctKey='ct-'+tabId+'-'+s.id+'-'+item.id;
+        const ctDrop=infoDropHtml(ctKey,[
+          {label:'Descripción',value:item.descripcion||''},
+          {label:'Precio',value:item.precio>0?'$'+fmt(item.precio):'',color:'#22d685'},
+          {label:'Link',html:item.link?`<a href="${item.link}" target="_blank" style="color:#00cce0;text-decoration:none;word-break:break-all">${item.link}</a>`:'',value:item.link?'_':''},
+          {label:'Notas',value:item.notas||''},
+        ]);
         return`<div class="card${item.checked?' done':''}">
-          <div class="card-row">
-            <div class="checkbox${item.checked?' checked':''}" onclick="toggleCustomItem('${tabId}','${s.id}',${item.id})"></div>
+          <div class="card-row" onclick="toggleInfoDrop('${ctKey}','${tabId}')" style="cursor:pointer">
+            <div class="checkbox${item.checked?' checked':''}" onclick="toggleCustomItem('${tabId}','${s.id}',${item.id});event.stopPropagation()"></div>
             <div class="card-body">
               <div class="item-name">${item.nombre}${item.checked?'<span class="selected-badge">Seleccionado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
               <div class="item-meta">
                 ${item.descripcion?`<span style="color:var(--color-text-secondary)">${item.descripcion}</span>`:''}
-                ${item.link?`<a href="${item.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
                 ${item.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${item.notas}</span>`:''}
               </div>
             </div>
             ${itemPriceBlock(item.precio>0?item.precio:0)}
-            <div class="card-actions">
+            <div class="card-actions" onclick="event.stopPropagation()">
+              ${item.link?`<button class="btn-icon" onclick="window.open('${item.link}','_blank')" title="Abrir link"><i class="ti ti-external-link"></i></button>`:''}
               ${state.personas.length>1?`<button class="btn-icon${hasSubset?' btn-icon-active':''}" onclick="toggleParticOpen('ct-${tabId}-${item.id}','${tabId}')" title="Participantes" style="${hasSubset?'color:#1D9E75':''}"><i class="ti ti-users"></i></button>`:''}
               <button class="btn-icon" onclick="formCustomItem('${tabId}','${s.id}',${item.id})"><i class="ti ti-edit"></i></button>
               <button class="btn-icon" onclick="deleteCustomItem('${tabId}','${s.id}',${item.id})"><i class="ti ti-trash"></i></button>
             </div>
           </div>
+          ${ctDrop}
           ${expanded?`<div style="padding:.5rem .75rem .75rem;border-top:.5px solid var(--color-border-tertiary);margin-top:0">
             <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px">¿Quiénes participan?</div>
             <div style="display:flex;flex-wrap:wrap;gap:6px">${partChips}</div>
