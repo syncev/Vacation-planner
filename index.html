@@ -923,11 +923,11 @@ ${renderPersonas()}
   ${r.personas.map(p=>`<div class="metric-card metric-card-persona">
     <div class="metric-label">Total ${p.nombre}</div>
     <div class="metric-value">${p.total>0?'$'+fmt(p.total):'—'}</div>
-    <div class="metric-sub">${p.topExpense?'Mayor gasto: '+p.topExpense.label+(p.topExpense.detail?' · '+p.topExpense.detail:'')+(p.topExpense.date?' · '+p.topExpense.date:''):'Sin gastos confirmados'}</div>
+    <div class="metric-sub">${p.topExpense?'Mayor gasto: '+p.topExpense.label+' — $'+fmt(p.topExpense.amount)+(p.topExpense.detail?' · '+p.topExpense.detail:'')+(p.topExpense.date?' · '+p.topExpense.date:''):'Sin gastos confirmados'}</div>
   </div>`).join('')}
   ${r.personas.some(p=>p.vuelosChecked.length>0)?`<div class="metric-card" onclick="switchTab('vuelos')" style="${_mcNav}">
     <div class="metric-label">Embarques</div>
-    ${r.personas.filter(p=>p.vuelosChecked.length>0).map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:6px"><span style="font-size:12px;font-weight:600">${p.nombre}</span><span style="font-size:12px;font-weight:500;flex-shrink:0">$${fmt(p.vueloTotal)}</span></div>`).join('')}
+    ${r.personas.filter(p=>p.vuelosChecked.length>0).map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:6px"><span style="font-size:12px;font-weight:600">${p.nombre}</span><span style="font-size:12px;font-weight:500;flex-shrink:0;color:#22d685">$${fmt(p.vueloTotal)}</span></div>`).join('')}
   </div>`:''}
   ${r.hospChecked.length>0?hospMetricCard(r):''}
   ${r.trasladosChecked.length>0?trasladosMetricCard(r):''}
