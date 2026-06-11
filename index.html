@@ -180,15 +180,16 @@ function migrateState(s){
   }
   if(!s.personas)s.personas=[];
   if(!s.vuelos||Array.isArray(s.vuelos))s.vuelos={};
+  else Object.keys(s.vuelos).forEach(k=>{s.vuelos[k]=s.vuelos[k].map(v=>({descripcion:'',notas:'',...v}));});
   if(!s.tripName)s.tripName='Mi Viaje';
   if(s.tripDate===undefined)s.tripDate='';
   if(!s.ski)s.ski={dias:[],pase:[],equipo:[],ropa:[]};
   else{if(!s.ski.dias)s.ski.dias=[];if(!s.ski.pase)s.ski.pase=[];if(!s.ski.equipo)s.ski.equipo=[];if(!s.ski.ropa)s.ski.ropa=[];}
   if(s.actividades)s.actividades=s.actividades.map(a=>({fecha:'',fechaFin:'',participantes:[],...a}));
   if(!s.hospedaje)s.hospedaje=[];
-  else s.hospedaje=s.hospedaje.map(h=>({participantes:[],...h}));
+  else s.hospedaje=s.hospedaje.map(h=>({participantes:[],fechaInicio:'',fechaFin:'',...h}));
   if(!s.traslados)s.traslados=[];
-  else s.traslados=s.traslados.map(t=>({participantes:[],...t}));
+  else s.traslados=s.traslados.map(t=>({participantes:[],fecha:'',...t}));
   ['pase','equipo','ropa'].forEach(k=>{s.ski[k]=s.ski[k].map(i=>({participantes:[],...i}));});
   if(!s.customTabs)s.customTabs=[];
   else s.customTabs=s.customTabs.map(ct=>({fechas:[],...ct,secciones:(ct.secciones||[]).map(sec=>({...sec,items:(sec.items||[]).map(i=>({participantes:[],...i}))}))}));
@@ -407,16 +408,117 @@ function navCal(delta){
   rerenderCalGrids();
 }
 
+// ── Inline date picker ────────────────────────────────────────────────────────
+function getAllPlannerDates(){
+  const iso=/^\d{4}-\d{2}-\d{2}$/,d=[];
+  state.actividades.forEach(a=>{if(iso.test(a.fecha||''))d.push(a.fecha);if(iso.test(a.fechaFin||''))d.push(a.fechaFin);});
+  (state.ski.dias||[]).forEach(s=>{if(iso.test(s.fecha||''))d.push(s.fecha);});
+  Object.values(state.vuelos||{}).forEach(list=>list.forEach(v=>{
+    if(iso.test(v.fechaIda||''))d.push(v.fechaIda);
+    if(iso.test(v.fechaVuelta||''))d.push(v.fechaVuelta);
+  }));
+  state.hospedaje.forEach(h=>{if(iso.test(h.fechaInicio||''))d.push(h.fechaInicio);if(iso.test(h.fechaFin||''))d.push(h.fechaFin);});
+  state.traslados.forEach(t=>{if(iso.test(t.fecha||''))d.push(t.fecha);});
+  (state.customTabs||[]).forEach(ct=>(ct.fechas||[]).forEach(f=>{if(iso.test(f.fecha||''))d.push(f.fecha);}));
+  return d;
+}
+function smartCalStart(){
+  const dates=getAllPlannerDates();
+  if(!dates.length){const n=new Date();return{year:n.getFullYear(),month:n.getMonth()};}
+  const today=new Date();today.setHours(0,0,0,0);
+  const nearest=dates.map(d=>new Date(d+'T00:00:00')).sort((a,b)=>Math.abs(a-today)-Math.abs(b-today))[0];
+  let year=nearest.getFullYear(),month=nearest.getMonth();
+  if(nearest.getDate()<=15){month--;if(month<0){month=11;year--;}}
+  return{year,month};
+}
+let _ipTarget=null,_ipCalId=null,_ipYear=0,_ipMonth=0;
+function openInlineCal(inputId,calId){
+  const cal=document.getElementById(calId);if(!cal)return;
+  if(_ipCalId===calId&&cal.style.display!=='none'){closeInlineCal();return;}
+  if(_ipCalId)closeInlineCal();
+  _ipTarget=inputId;_ipCalId=calId;
+  const{year,month}=smartCalStart();
+  _ipYear=year;_ipMonth=month;
+  cal.style.display='block';
+  renderInlineCal();
+}
+function closeInlineCal(){
+  if(_ipCalId){const c=document.getElementById(_ipCalId);if(c)c.style.display='none';}
+  _ipCalId=null;_ipTarget=null;
+}
+function navInlineCal(delta){
+  _ipMonth+=delta;
+  if(_ipMonth>11){_ipMonth=0;_ipYear++;}
+  if(_ipMonth<0){_ipMonth=11;_ipYear--;}
+  renderInlineCal();
+}
+function renderInlineCal(){
+  const cal=document.getElementById(_ipCalId);if(!cal)return;
+  const curVal=document.getElementById(_ipTarget)?.value||'';
+  const firstDow=(new Date(_ipYear,_ipMonth,1).getDay()+6)%7;
+  const total=new Date(_ipYear,_ipMonth+1,0).getDate();
+  const cells=[];
+  for(let i=0;i<firstDow;i++)cells.push('<div></div>');
+  for(let d=1;d<=total;d++){
+    const iso=`${_ipYear}-${String(_ipMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    cells.push(`<div class="cal-day${iso===curVal?' sel':''}" onclick="pickDate('${iso}')">${d}</div>`);
+  }
+  cal.innerHTML=`<div style="background:#1a2535;border:1px solid rgba(90,140,210,0.22);border-radius:8px;padding:.625rem;margin-top:4px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+      <button type="button" class="btn-icon" onclick="navInlineCal(-1)"><i class="ti ti-chevron-left"></i></button>
+      <span style="font-size:12px;font-weight:500;color:var(--color-text-secondary)">${CAL_MONTHS[_ipMonth]} ${_ipYear}</span>
+      <button type="button" class="btn-icon" onclick="navInlineCal(1)"><i class="ti ti-chevron-right"></i></button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">
+      ${CAL_DAYS.map(d=>`<div style="font-size:10px;color:var(--color-text-tertiary);text-align:center;padding:3px 0">${d}</div>`).join('')}
+      ${cells.join('')}
+    </div>
+  </div>`;
+}
+function pickDate(iso){
+  if(!_ipTarget)return;
+  const inp=document.getElementById(_ipTarget);if(inp)inp.value=iso;
+  const lbl=document.getElementById(_ipTarget+'-lbl');
+  if(lbl){lbl.textContent=fmtDate(iso);lbl.parentElement.style.color='var(--color-text-primary)';}
+  const xBtn=document.getElementById(_ipTarget+'-xbtn');
+  if(xBtn){xBtn.style.opacity='1';xBtn.style.pointerEvents='auto';}
+  closeInlineCal();
+}
+function clearDateField(id){
+  const inp=document.getElementById(id);if(inp)inp.value='';
+  const lbl=document.getElementById(id+'-lbl');
+  if(lbl){lbl.textContent='— elegir fecha —';lbl.parentElement.style.color='var(--color-text-tertiary)';}
+  const xBtn=document.getElementById(id+'-xbtn');
+  if(xBtn){xBtn.style.opacity='0';xBtn.style.pointerEvents='none';}
+  closeInlineCal();
+}
+function dateFieldHtml(id,value,label){
+  const isIso=/^\d{4}-\d{2}-\d{2}$/.test(value||'');
+  const display=isIso?fmtDate(value):(value||'— elegir fecha —');
+  const hasVal=isIso&&!!value;
+  return`<div class="form-group"><label>${label}</label>
+    <div style="display:flex;gap:6px;align-items:center">
+      <div onclick="openInlineCal('${id}','${id}-cal')" style="flex:1;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border:1px solid rgba(90,140,210,0.18);border-radius:var(--border-radius-md);background:rgba(6,12,24,0.85);color:${hasVal?'var(--color-text-primary)':'var(--color-text-tertiary)'};font-size:13px;min-height:34px">
+        <span id="${id}-lbl">${display}</span>
+        <i class="ti ti-calendar" style="font-size:14px;color:var(--color-text-secondary);flex-shrink:0;margin-left:6px"></i>
+      </div>
+      <button type="button" id="${id}-xbtn" class="btn-icon" onclick="clearDateField('${id}')" title="Borrar" style="flex-shrink:0;${hasVal?'':'opacity:0;pointer-events:none'}"><i class="ti ti-x" style="font-size:13px"></i></button>
+    </div>
+    <input type="hidden" id="${id}" value="${value||''}">
+    <div id="${id}-cal" style="display:none"></div>
+  </div>`;
+}
+
 function openSkiCalendar(){
   _calSelected=new Set((state.ski.dias||[]).map(d=>d.fecha).filter(Boolean));
   _calNotes={};
   (state.ski.dias||[]).forEach(d=>{if(d.fecha&&d.notas)_calNotes[d.fecha]=d.notas;});
-  const now=new Date();
-  _calStartYear=now.getFullYear();_calStartMonth=now.getMonth();
+  const{year:_sy,month:_sm}=smartCalStart();
+  _calStartYear=_sy;_calStartMonth=_sm;
   openModal(`<h3>Días de ski</h3>
     <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:.75rem">Tocá los días para seleccionarlos.</p>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem">
-      <button id="cal-prev" class="btn-icon" onclick="navCal(-1)" disabled><i class="ti ti-chevron-left"></i></button>
+      <button id="cal-prev" class="btn-icon" onclick="navCal(-1)"><i class="ti ti-chevron-left"></i></button>
       <span id="cal-title" style="font-size:12px;color:var(--color-text-secondary)">${calTitle()}</span>
       <button class="btn-icon" onclick="navCal(1)"><i class="ti ti-chevron-right"></i></button>
     </div>
@@ -561,7 +663,7 @@ function calcResumen(){
        date:vuelosChecked[0]?.fechaIda||vuelosChecked[0]?.fechaVuelta||''},
       {label:'Hospedaje',amount:hospForMe,
        detail:myHosp.length>1?myHosp.length+' hospedajes':(myHosp[0]?.nombre||''),
-       date:myHosp[0]?.fechas||''},
+       date:myHosp[0]?.fechaInicio?fmtDate(myHosp[0].fechaInicio)+(myHosp[0].fechaFin?' – '+fmtDate(myHosp[0].fechaFin):''):myHosp[0]?.fechas||''},
       {label:state.skiName||'Ski',amount:skiForMe,
        detail:mySki.length>1?mySki.length+' ítems':(mySki[0]?.nombre||''),
        date:(state.ski.dias||[])[0]?.fecha||''},
@@ -660,7 +762,7 @@ function _perPersonRows(personas,fieldFn){
 const _mcNav='cursor:pointer;transition:border-color .15s,box-shadow .15s';
 function _mcWrap(tab,inner){return`<div class="metric-card" onclick="switchTab('${tab}')" style="${_mcNav}">${inner}</div>`;}
 function hospMetricCard(r){
-  const lbl=r.hospChecked.map(h=>h.fechas||h.nombre).join(' | ');
+  const lbl=r.hospChecked.map(h=>h.fechaInicio?fmtDate(h.fechaInicio)+(h.fechaFin?' – '+fmtDate(h.fechaFin):''):h.fechas||h.nombre).join(' | ');
   if(r.hospAllSame||r.personas.length<=1)return _mcWrap('hospedaje',`<div class="metric-label">Hospedaje (p/p)</div><div class="metric-value">$${fmt(r.hospPP)}</div><div class="metric-sub">${lbl}</div>`);
   return _mcWrap('hospedaje',`<div class="metric-label">Hospedaje</div>${_perPersonRows(r.personas,p=>p.hospForMe)}<div style="font-size:11px;color:var(--color-text-tertiary);margin-top:4px">${lbl}</div>`);
 }
@@ -784,9 +886,11 @@ function renderVuelos(){
       ${list.map(v=>`<div class="card${v.checked?' done':''}"><div class="card-row">
         <div class="checkbox${v.checked?' checked':''}" onclick="toggleVuelo(${p.id},${v.id})"></div>
         <div class="card-body"><div class="item-name">${v.nombre}${v.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
-        <div class="item-meta">${v.aerolinea?`<span class="badge badge-gray">${v.aerolinea}</span>`:''}
-        ${v.fechaIda?`<span>Ida: ${v.fechaIda}</span>`:''}${v.fechaVuelta?`<span>Vuelta: ${v.fechaVuelta}</span>`:''}
-        ${v.link?`<a href="${v.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}</div></div>
+        <div class="item-meta">${v.descripcion?`<span style="color:var(--color-text-secondary)">${v.descripcion}</span>`:''}
+        ${v.aerolinea?`<span class="badge badge-gray">${v.aerolinea}</span>`:''}
+        ${v.fechaIda?`<span>Ida: ${/^\d{4}-\d{2}-\d{2}$/.test(v.fechaIda)?fmtDate(v.fechaIda):v.fechaIda}</span>`:''}${v.fechaVuelta?`<span>Vuelta: ${/^\d{4}-\d{2}-\d{2}$/.test(v.fechaVuelta)?fmtDate(v.fechaVuelta):v.fechaVuelta}</span>`:''}
+        ${v.link?`<a href="${v.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
+        ${v.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${v.notas}</span>`:''}</div></div>
         ${itemPriceBlock(v.precio||0)}
         <div class="card-actions"><button class="btn-icon" onclick="editVuelo(${p.id},${v.id})"><i class="ti ti-edit"></i></button>
         <button class="btn-icon" onclick="deleteVuelo(${p.id},${v.id})"><i class="ti ti-trash"></i></button></div>
@@ -813,7 +917,7 @@ function renderHospedaje(){
         <div class="checkbox${h.checked?' checked':''}" onclick="toggleItem('hospedaje',${h.id})"></div>
         <div class="card-body"><div class="item-name">${h.nombre}${h.checked?'<span class="selected-badge">Seleccionado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
         <div class="item-meta"><span class="badge ${platformBadge(h.plataforma)}">${h.plataforma}</span>
-        ${h.fechas?`<span>${h.fechas}</span>`:''}
+        ${h.fechaInicio?`<span>${fmtDate(h.fechaInicio)}${h.fechaFin?' – '+fmtDate(h.fechaFin):''}</span>`:h.fechas?`<span>${h.fechas}</span>`:''}
         ${h.link?`<a href="${h.link}" target="_blank" class="link-text"><i class="ti ti-external-link"></i>Ver</a>`:''}
         ${h.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${h.notas}</span>`:''}</div></div>
         ${itemPriceBlock(h.precioTotal>1000?Math.round(h.precioTotal/ppCount):0,h.precioTotal>1000?'total $'+fmt(h.precioTotal):'')}
@@ -943,6 +1047,7 @@ function renderTraslados(){
         <div class="checkbox${t.checked?' checked':''}" onclick="toggleItem('traslados',${t.id})"></div>
         <div class="card-body"><div class="item-name">${t.nombre}${t.checked?'<span class="selected-badge">Confirmado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
         <div class="item-meta">${t.tipo?`<span class="badge badge-gray">${t.tipo}</span>`:''}
+        ${t.fecha?`<span>${fmtDate(t.fecha)}</span>`:''}
         ${t.notas?`<span style="color:var(--color-text-secondary);font-style:italic">${t.notas}</span>`:''}</div></div>
         ${itemPriceBlock(t.precio>0?t.precio:0,t.precio>0?(t.precioPP===false?'total':'p/p'):'')}
         <div class="card-actions">
@@ -1008,14 +1113,18 @@ $('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay')
 
 function formVuelo(personaId,v){
   const p=state.personas.find(p=>p.id===personaId);
-  const isEdit=!!v;v=v||{nombre:'',aerolinea:'',fechaIda:'',fechaVuelta:'',precio:'',link:''};
+  const isEdit=!!v;v=v||{nombre:'',descripcion:'',aerolinea:'',fechaIda:'',fechaVuelta:'',precio:'',link:'',notas:''};
   openModal(`<h3>${isEdit?'Editar vuelo':'Nuevo vuelo'} — ${p?p.nombre:''}</h3>
     <div class="form-group"><label>Nombre</label><input id="fn" value="${v.nombre}"></div>
+    <div class="form-group"><label>Descripción</label><input id="fdesc" value="${v.descripcion||''}" placeholder="ej: Rosario → Bs As → Bariloche"></div>
     <div class="form-group"><label>Aerolínea</label><input id="fa" value="${v.aerolinea}"></div>
-    <div class="form-row"><div class="form-group"><label>Fecha ida</label><input id="fi" value="${v.fechaIda}" placeholder="ej: 13-ago"></div>
-    <div class="form-group"><label>Fecha vuelta</label><input id="fv" value="${v.fechaVuelta}" placeholder="ej: 18-ago"></div></div>
+    <div class="form-row">
+      <div>${dateFieldHtml('fi',v.fechaIda||'','Fecha ida')}</div>
+      <div>${dateFieldHtml('fv',v.fechaVuelta||'','Fecha vuelta')}</div>
+    </div>
     <div class="form-group"><label>Precio (ARS)</label><input id="fp" type="number" value="${v.precio}"></div>
     <div class="form-group"><label>Link</label><input id="fl" value="${v.link}" placeholder="https://..."></div>
+    <div class="form-group"><label>Notas</label><textarea id="fnotas" placeholder="Escalas, horarios, equipaje...">${v.notas||''}</textarea></div>
     <div class="modal-actions">${isEdit?`<button class="btn-danger" onclick="deleteVuelo(${personaId},${v.id});closeModal()">Eliminar</button>`:''}
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
     <button class="btn-primary" onclick="saveVuelo(${personaId},${isEdit?v.id:0})">Guardar</button></div>`);
@@ -1025,7 +1134,7 @@ function editVuelo(personaId,id){formVuelo(personaId,(state.vuelos[String(person
 function saveVuelo(personaId,id){
   const k=String(personaId);
   if(!state.vuelos[k])state.vuelos[k]=[];
-  const n={nombre:$('fn').value,aerolinea:$('fa').value,fechaIda:$('fi').value,fechaVuelta:$('fv').value,precio:parseFloat($('fp').value)||0,link:$('fl').value,checked:false};
+  const n={nombre:$('fn').value,descripcion:$('fdesc').value.trim(),aerolinea:$('fa').value,fechaIda:$('fi').value,fechaVuelta:$('fv').value,precio:parseFloat($('fp').value)||0,link:$('fl').value,notas:$('fnotas').value.trim(),checked:false};
   if(id){state.vuelos[k]=state.vuelos[k].map(v=>v.id===id?{...v,...n,id}:v);}else{state.vuelos[k].push({...n,id:nextId(state.vuelos[k])});}
   saveState();closeModal();renderVuelos();renderResumen();
 }
@@ -1043,12 +1152,16 @@ function deleteVuelo(personaId,id){
 }
 
 function formHosp(h){
-  const e=!!h;h=h||{nombre:'',plataforma:'Airbnb',fechas:'14–18 ago',precioTotal:'',link:'',notas:''};
+  const e=!!h;h=h||{nombre:'',plataforma:'Airbnb',fechas:'',fechaInicio:'',fechaFin:'',precioTotal:'',link:'',notas:''};
   openModal(`<h3>${e?'Editar hospedaje':'Nuevo hospedaje'}</h3>
     <div class="form-group"><label>Nombre</label><input id="hn" value="${h.nombre}"></div>
-    <div class="form-row"><div class="form-group"><label>Plataforma</label><select id="hp">
+    <div class="form-group"><label>Plataforma</label><select id="hp">
     ${['Airbnb','Airbnb AR','Booking','Hostelworld','Otro'].map(o=>`<option ${h.plataforma===o?'selected':''}>${o}</option>`).join('')}
-    </select></div><div class="form-group"><label>Fechas</label><input id="hf" value="${h.fechas}"></div></div>
+    </select></div>
+    <div class="form-row">
+      <div>${dateFieldHtml('h-finicio',h.fechaInicio||'','Check-in')}</div>
+      <div>${dateFieldHtml('h-ffin',h.fechaFin||'','Check-out')}</div>
+    </div>
     <div class="form-group"><label>Precio total (ARS, será dividido entre ${Math.max(state.personas.length,1)} viajero${state.personas.length!==1?'s':''})</label><input id="hpr" type="number" value="${h.precioTotal}"></div>
     <div class="form-group"><label>Link</label><input id="hl" value="${h.link}" placeholder="https://..."></div>
     <div class="form-group"><label>Notas</label><textarea id="hno">${h.notas||''}</textarea></div>
@@ -1059,7 +1172,9 @@ function formHosp(h){
 function addHosp(){formHosp(null);}
 function editHosp(id){formHosp(state.hospedaje.find(h=>h.id===id));}
 function saveHosp(id){
-  const n={nombre:$('hn').value,plataforma:$('hp').value,fechas:$('hf').value,precioTotal:parseFloat($('hpr').value)||0,link:$('hl').value,notas:$('hno').value,checked:false};
+  const fechaInicio=$('h-finicio').value,fechaFin=$('h-ffin').value;
+  const fechas=fechaInicio&&fechaFin?fmtDate(fechaInicio)+' – '+fmtDate(fechaFin):fechaInicio?fmtDate(fechaInicio):'';
+  const n={nombre:$('hn').value,plataforma:$('hp').value,fechas,fechaInicio,fechaFin,precioTotal:parseFloat($('hpr').value)||0,link:$('hl').value,notas:$('hno').value,checked:false};
   if(id){state.hospedaje=state.hospedaje.map(h=>h.id===id?{...h,...n,id}:h);}else{state.hospedaje.push({...n,id:nextId(state.hospedaje)});}
   saveState();closeModal();renderHospedaje();renderResumen();
 }
@@ -1123,13 +1238,14 @@ function saveActividad(id){
 }
 
 function formTraslado(t){
-  const e=!!t;t=t||{nombre:'',tipo:'Remis / Transfer',precio:'',notas:'',precioPP:true};
+  const e=!!t;t=t||{nombre:'',tipo:'Remis / Transfer',fecha:'',precio:'',notas:'',precioPP:true};
   const n=Math.max(state.personas.length,1);
   openModal(`<h3>${e?'Editar traslado':'Nuevo traslado'}</h3>
     <div class="form-group"><label>Tramo</label><input id="tn" value="${t.nombre}"></div>
     <div class="form-row"><div class="form-group"><label>Tipo</label><select id="tt">
     ${['Remis / Transfer','Bus','Bus / Remis','Tour / Auto','Otro'].map(o=>`<option ${t.tipo===o?'selected':''}>${o}</option>`).join('')}
     </select></div><div class="form-group"><label>Precio (ARS)</label><input id="tpr" type="number" value="${t.precio}"></div></div>
+    ${dateFieldHtml('t-fecha',t.fecha||'','Fecha')}
     <div class="form-group"><label>Modo de precio</label><select id="tpp">
       <option value="1" ${t.precioPP!==false?'selected':''}>Por persona</option>
       <option value="0" ${t.precioPP===false?'selected':''}>Total (÷ ${n} viajero${n!==1?'s':''})</option>
@@ -1142,7 +1258,7 @@ function formTraslado(t){
 function addTraslado(){formTraslado(null);}
 function editTraslado(id){formTraslado(state.traslados.find(t=>t.id===id));}
 function saveTraslado(id){
-  const n={nombre:$('tn').value,tipo:$('tt').value,precio:parseFloat($('tpr').value)||0,precioPP:$('tpp').value==='1',notas:$('tno').value,checked:false};
+  const n={nombre:$('tn').value,tipo:$('tt').value,fecha:$('t-fecha').value,precio:parseFloat($('tpr').value)||0,precioPP:$('tpp').value==='1',notas:$('tno').value,checked:false};
   if(id){state.traslados=state.traslados.map(t=>t.id===id?{...t,...n,id}:t);}else{state.traslados.push({...n,id:nextId(state.traslados)});}
   saveState();closeModal();renderTraslados();renderResumen();
 }
@@ -1298,12 +1414,12 @@ function openCustomTabCalendar(tabId){
   _calSelected=new Set(ct.fechas.map(f=>f.fecha).filter(Boolean));
   _calNotes={};
   ct.fechas.forEach(f=>{if(f.fecha&&f.nota)_calNotes[f.fecha]=f.nota;});
-  const now=new Date();
-  _calStartYear=now.getFullYear();_calStartMonth=now.getMonth();
+  const{year:_cy,month:_cm}=smartCalStart();
+  _calStartYear=_cy;_calStartMonth=_cm;
   openModal(`<h3>Fechas — ${ct.nombre}</h3>
     <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:.75rem">Tocá los días para seleccionarlos.</p>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem">
-      <button id="cal-prev" class="btn-icon" onclick="navCal(-1)" disabled><i class="ti ti-chevron-left"></i></button>
+      <button id="cal-prev" class="btn-icon" onclick="navCal(-1)"><i class="ti ti-chevron-left"></i></button>
       <span id="cal-title" style="font-size:12px;color:var(--color-text-secondary)">${calTitle()}</span>
       <button class="btn-icon" onclick="navCal(1)"><i class="ti ti-chevron-right"></i></button>
     </div>
