@@ -342,11 +342,15 @@ function showUndoToast(label,restoreFn,duration=5000){
 function hideUndoToast(){$('undo-toast').style.display='none';}
 
 let _modalLocked=false;
-let _modalDirty=false;
-function openModal(html){$('modal-box').innerHTML=html;$('modal-overlay').style.display='flex';_modalDirty=false;}
-function closeModal(){if(_modalLocked)return;$('modal-overlay').style.display='none';_modalDirty=false;}
-function attemptCloseModal(){if(_modalLocked)return;if(_modalDirty){$('discard-overlay').style.display='flex';}else{closeModal();}}
-function confirmDiscard(){$('discard-overlay').style.display='none';_modalDirty=false;closeModal();}
+function openModal(html){$('modal-box').innerHTML=html;$('modal-overlay').style.display='flex';}
+function closeModal(){if(_modalLocked)return;$('modal-overlay').style.display='none';}
+function _modalHasForms(){return $('modal-box').querySelector('input,textarea,select')!==null;}
+function attemptCloseModal(){
+  if(_modalLocked)return;
+  if(_modalHasForms()){const d=$('discard-overlay');d.style.display='flex';}
+  else closeModal();
+}
+function confirmDiscard(){$('discard-overlay').style.display='none';closeModal();}
 function cancelDiscard(){$('discard-overlay').style.display='none';}
 
 function renderTitle(){
@@ -1258,8 +1262,6 @@ function toggleItem(col,id){state[col]=state[col].map(i=>({...i,checked:i.id===i
 function toggleSki(key,id){state.ski[key]=state.ski[key].map(i=>({...i,checked:i.id===id?!i.checked:i.checked}));saveState();renderSki();renderResumen();}
 
 $('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay'))attemptCloseModal();});
-$('modal-box').addEventListener('input',()=>{_modalDirty=true;});
-$('modal-box').addEventListener('change',()=>{_modalDirty=true;});
 $('discard-overlay').addEventListener('click',e=>{if(e.target===$('discard-overlay'))cancelDiscard();});
 
 // ── Multi-leg (tramos) ────────────────────────────────────────────────────────
