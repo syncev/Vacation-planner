@@ -117,6 +117,7 @@ h3{font-size:15px;font-weight:500;margin-bottom:.75rem;color:var(--color-text-pr
 .admin-trip-card .trip-hash{font-size:11px;color:var(--color-text-tertiary);font-family:monospace;margin-top:3px}
 #undo-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:rgba(215,228,248,0.95);color:#0a1020;padding:.625rem 1.125rem;border-radius:20px;display:none;align-items:center;gap:.875rem;box-shadow:0 4px 20px rgba(0,0,0,.5);z-index:4000;font-size:13px;white-space:nowrap;animation:toastIn .2s ease}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes confirmIn{from{opacity:0;transform:scale(.94) translateY(-10px)}to{opacity:1;transform:scale(1) translateY(0)}}
 #undo-btn{color:#0d8a60!important}
 </style>
 </head>
@@ -150,6 +151,16 @@ h3{font-size:15px;font-weight:500;margin-bottom:.75rem;color:var(--color-text-pr
 
 <div id="modal-overlay" class="modal-overlay" style="display:none">
   <div class="modal" id="modal-box"></div>
+</div>
+<div id="discard-overlay" style="display:none;position:fixed;inset:0;z-index:200;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px)">
+  <div style="background:#1e2a38;border:1px solid rgba(90,140,210,0.38);border-radius:var(--border-radius-xl);padding:1.5rem 1.75rem;max-width:296px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.7);text-align:center;animation:confirmIn .18s ease">
+    <div style="font-size:15px;font-weight:600;color:#ffffff;margin-bottom:.375rem">¿Salir sin guardar?</div>
+    <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:1.25rem;line-height:1.5">Los datos que ingresaste se perderán si salís ahora.</div>
+    <div style="display:flex;gap:.625rem">
+      <button onclick="confirmDiscard()" class="btn-secondary" style="flex:1">Salir</button>
+      <button onclick="cancelDiscard()" class="btn-primary" style="flex:1">Seguir editando</button>
+    </div>
+  </div>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -331,8 +342,12 @@ function showUndoToast(label,restoreFn,duration=5000){
 function hideUndoToast(){$('undo-toast').style.display='none';}
 
 let _modalLocked=false;
-function openModal(html){$('modal-box').innerHTML=html;$('modal-overlay').style.display='flex';}
-function closeModal(){if(_modalLocked)return;$('modal-overlay').style.display='none';}
+let _modalDirty=false;
+function openModal(html){$('modal-box').innerHTML=html;$('modal-overlay').style.display='flex';_modalDirty=false;}
+function closeModal(){if(_modalLocked)return;$('modal-overlay').style.display='none';_modalDirty=false;}
+function attemptCloseModal(){if(_modalLocked)return;if(_modalDirty){$('discard-overlay').style.display='flex';}else{closeModal();}}
+function confirmDiscard(){$('discard-overlay').style.display='none';_modalDirty=false;closeModal();}
+function cancelDiscard(){$('discard-overlay').style.display='none';}
 
 function renderTitle(){
   const name=state.tripName||'Mi Viaje';
@@ -1242,7 +1257,10 @@ function toggleVuelo(personaId,id){
 function toggleItem(col,id){state[col]=state[col].map(i=>({...i,checked:i.id===id?!i.checked:i.checked}));saveState();renderPanel(col);renderResumen();}
 function toggleSki(key,id){state.ski[key]=state.ski[key].map(i=>({...i,checked:i.id===id?!i.checked:i.checked}));saveState();renderSki();renderResumen();}
 
-$('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay'))closeModal();});
+$('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay'))attemptCloseModal();});
+$('modal-box').addEventListener('input',()=>{_modalDirty=true;});
+$('modal-box').addEventListener('change',()=>{_modalDirty=true;});
+$('discard-overlay').addEventListener('click',e=>{if(e.target===$('discard-overlay'))cancelDiscard();});
 
 // ── Multi-leg (tramos) ────────────────────────────────────────────────────────
 let _editTramos=[];
