@@ -92,6 +92,11 @@ body::-webkit-scrollbar{display:none}
 h2{font-size:18px;font-weight:500;margin-bottom:1rem;color:var(--color-text-primary)}
 h3{font-size:15px;font-weight:500;margin-bottom:.75rem;color:var(--color-text-primary)}
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
+.sort-btn{font-size:10px;padding:2px 7px;border:1px solid var(--color-border-secondary);background:none;color:var(--color-text-tertiary);border-radius:4px;cursor:pointer;font-family:var(--font-sans);white-space:nowrap;transition:all .15s;line-height:1.6}
+.sort-btn:hover{color:var(--color-text-primary);border-color:rgba(29,158,117,0.4)}
+.sort-btn.sort-active{color:#1D9E75;border-color:#1D9E75;background:rgba(29,158,117,0.08)}
+.vu-list-wrap{overflow:hidden;transition:max-height .32s ease,opacity .22s ease;max-height:4000px;opacity:1}
+.vu-list-wrap.vu-collapsed{max-height:0 !important;opacity:0}
 .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1.5rem}
 .metric-card{background:#252d36;border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:.875rem 1rem;backdrop-filter:blur(4px)}
 .metric-card-persona{border:2px solid rgba(240,190,30,0.95);box-shadow:0 0 22px rgba(240,190,30,0.22)}
@@ -253,6 +258,8 @@ function toggleParticipante(actId,personaId){
 let _particExpanded=new Set();
 function toggleParticOpen(key,panel){_particExpanded.has(key)?_particExpanded.delete(key):_particExpanded.add(key);renderPanel(panel);}
 let _drag={src:null,col:null,extra:null};
+let _vuSortState={};
+let _vuCollapsed=new Set();
 function _getDragArr(col,extra){
   if(col==='vuelos')return state.vuelos[String(extra)]||[];
   if(col==='hospedaje')return state.hospedaje;
@@ -329,6 +336,57 @@ function dragEnd(e){
   _drag={src:null,col:null,extra:null,srcH:80,overId:null};
 }
 const _dh=`<div class="drag-handle" onclick="event.stopPropagation()" title="Arrastrar para reordenar"><i class="ti ti-grip-vertical" style="font-size:15px"></i></div>`;
+function _flipAnimate(positions){
+  requestAnimationFrame(()=>{
+    Object.entries(positions).forEach(([id,oldTop])=>{
+      const el=document.querySelector(`.card[data-drag-id="${id}"]`);
+      if(!el)return;
+      const delta=oldTop-el.getBoundingClientRect().top;
+      if(Math.abs(delta)<1)return;
+      el.style.transition='none';
+      el.style.transform=`translateY(${delta}px)`;
+      requestAnimationFrame(()=>{
+        el.style.transition='transform .28s ease';
+        el.style.transform='';
+        el.addEventListener('transitionend',()=>{el.style.transition='';},{once:true});
+      });
+    });
+  });
+}
+function toggleVuCollapse(personaId){
+  const pid=String(personaId);
+  _vuCollapsed.has(pid)?_vuCollapsed.delete(pid):_vuCollapsed.add(pid);
+  const wrap=document.getElementById('vu-wrap-'+pid);
+  if(wrap)wrap.classList.toggle('vu-collapsed',_vuCollapsed.has(pid));
+  const chev=document.getElementById('vu-chev-'+pid);
+  if(chev)chev.style.transform=_vuCollapsed.has(pid)?'rotate(-90deg)':'';
+}
+function sortVuelos(personaId,key){
+  const pid=String(personaId);
+  const cur=_vuSortState[pid];
+  const asc=(cur&&cur.key===key)?!cur.asc:true;
+  _vuSortState[pid]={key,asc};
+  const arr=state.vuelos[pid]||[];
+  const positions={};
+  arr.forEach(v=>{
+    const el=document.querySelector(`.card[data-drag-id="${v.id}"]`);
+    if(el)positions[String(v.id)]=el.getBoundingClientRect().top;
+  });
+  arr.sort((a,b)=>{
+    let va,vb;
+    if(key==='nombre'){va=(a.nombre||'').toLowerCase();vb=(b.nombre||'').toLowerCase();}
+    else if(key==='fecha'){va=a.fechaIda||'';vb=b.fechaIda||'';}
+    else if(key==='costo'){va=(a.precio||0)+(a.tramos||[]).reduce((s,t)=>s+(t.precio||0),0);vb=(b.precio||0)+(b.tramos||[]).reduce((s,t)=>s+(t.precio||0),0);}
+    else{va=a.id;vb=b.id;}
+    if(va<vb)return asc?-1:1;
+    if(va>vb)return asc?1:-1;
+    return 0;
+  });
+  state.vuelos[pid]=arr;
+  saveState();
+  renderVuelos();
+  _flipAnimate(positions);
+}
 let _infoExpanded=new Set();
 function toggleInfoDrop(key,panel){
   const el=document.querySelector(`.info-drop[data-key="${key}"]`);
@@ -1221,28 +1279,43 @@ function switchTab(id){
 function renderVuelos(){
   const sections=state.personas.map(p=>{
     const list=state.vuelos[String(p.id)]||[];
+    const sc=_vuSortState[String(p.id)]||null;
+    const isCollapsed=_vuCollapsed.has(String(p.id));
+    const total=list.filter(v=>v.checked).reduce((s,v)=>s+(v.precio||0)+(v.tramos||[]).reduce((st,t)=>st+(t.precio||0),0),0);
+    const totalBadge=total>0?`<span style="font-size:11px;color:#22d685;font-weight:600;background:rgba(34,214,133,0.1);border:1px solid rgba(34,214,133,0.25);border-radius:10px;padding:1px 8px;margin-left:8px;vertical-align:middle">$${fmt(total)}</span>`:'';
+    const sortBtns=list.length>1?[
+      {k:'added',l:'Agregado'},{k:'nombre',l:'Nombre'},{k:'fecha',l:'Ida'},{k:'costo',l:'Precio'},
+    ].map(({k,l})=>{const on=sc&&sc.key===k;return`<button class="sort-btn${on?' sort-active':''}" onclick="sortVuelos(${p.id},'${k}');event.stopPropagation()">${l}${on?(sc.asc?' ↑':' ↓'):''}</button>`;}).join(''):'';
     return`<div style="margin-bottom:1.5rem">
-      <div class="section-header"><h3>${p.nombre}${p.origen?` <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">desde ${p.origen}</span>`:''}</h3></div>
-      ${list.length===0?'<p style="font-size:12px;color:var(--color-text-tertiary);padding:.5rem 0">Sin opciones de embarque aún.</p>':''}
-      ${list.map(v=>{
-        const vKey='vu-'+p.id+'-'+v.id;
-        const vDrop=vuInfoDrop(vKey,v);
-        return`<div class="card${v.checked?' done':''}" draggable="true" data-drag-id="${v.id}" ondragstart="dragStart(event,'vuelos',${v.id},${p.id})" ondragover="dragOver(event)" ondragenter="dragEnter(event,'vuelos',${v.id})" ondragleave="dragLeave(event)" ondrop="dragDrop(event,'vuelos',${v.id},${p.id})" ondragend="dragEnd(event)"><div class="card-row" onclick="toggleInfoDrop('${vKey}','vuelos')" style="cursor:pointer">
-          ${_dh}
-          <div class="checkbox${v.checked?' checked':''}" onclick="toggleVuelo(${p.id},${v.id});event.stopPropagation()"></div>
-          <div class="card-body">
-            <div class="item-name">${v.nombre}${v.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
-            ${vuMetaHtml(v)}
-          </div>
-          ${vueloPriceBlock(v)}
-          <div class="card-actions" onclick="event.stopPropagation()">
-            ${v.link?`<button class="btn-icon" onclick="window.open('${v.link}','_blank')" title="Abrir link"><i class="ti ti-external-link"></i></button>`:''}
-            <button class="btn-icon" onclick="editVuelo(${p.id},${v.id})"><i class="ti ti-edit"></i></button>
-            <button class="btn-icon" onclick="deleteVuelo(${p.id},${v.id})"><i class="ti ti-trash"></i></button>
-          </div>
-        </div>${vDrop}</div>`;
-      }).join('')}
-      <button class="add-btn" onclick="addVuelo(${p.id})"><i class="ti ti-plus"></i> Agregar embarque</button>
+      <div class="section-header" onclick="toggleVuCollapse(${p.id})" style="cursor:pointer;user-select:none">
+        <div style="display:flex;align-items:center;gap:6px">
+          <i id="vu-chev-${p.id}" class="ti ti-chevron-down" style="font-size:13px;color:var(--color-text-tertiary);transition:transform .22s ease;flex-shrink:0${isCollapsed?';transform:rotate(-90deg)':''}"></i>
+          <h3 style="margin:0">${p.nombre}${p.origen?` <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">desde ${p.origen}</span>`:''}${totalBadge}</h3>
+        </div>
+        ${sortBtns?`<div style="display:flex;gap:3px;flex-shrink:0" onclick="event.stopPropagation()">${sortBtns}</div>`:''}
+      </div>
+      <div id="vu-wrap-${p.id}" class="vu-list-wrap${isCollapsed?' vu-collapsed':''}">
+        ${list.length===0?'<p style="font-size:12px;color:var(--color-text-tertiary);padding:.5rem 0">Sin opciones de embarque aún.</p>':''}
+        ${list.map(v=>{
+          const vKey='vu-'+p.id+'-'+v.id;
+          const vDrop=vuInfoDrop(vKey,v);
+          return`<div class="card${v.checked?' done':''}" draggable="true" data-drag-id="${v.id}" ondragstart="dragStart(event,'vuelos',${v.id},${p.id})" ondragover="dragOver(event)" ondragenter="dragEnter(event,'vuelos',${v.id})" ondragleave="dragLeave(event)" ondrop="dragDrop(event,'vuelos',${v.id},${p.id})" ondragend="dragEnd(event)"><div class="card-row" onclick="toggleInfoDrop('${vKey}','vuelos')" style="cursor:pointer">
+            ${_dh}
+            <div class="checkbox${v.checked?' checked':''}" onclick="toggleVuelo(${p.id},${v.id});event.stopPropagation()"></div>
+            <div class="card-body">
+              <div class="item-name">${v.nombre}${v.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
+              ${vuMetaHtml(v)}
+            </div>
+            ${vueloPriceBlock(v)}
+            <div class="card-actions" onclick="event.stopPropagation()">
+              ${v.link?`<button class="btn-icon" onclick="window.open('${v.link}','_blank')" title="Abrir link"><i class="ti ti-external-link"></i></button>`:''}
+              <button class="btn-icon" onclick="editVuelo(${p.id},${v.id})"><i class="ti ti-edit"></i></button>
+              <button class="btn-icon" onclick="deleteVuelo(${p.id},${v.id})"><i class="ti ti-trash"></i></button>
+            </div>
+          </div>${vDrop}</div>`;
+        }).join('')}
+        <button class="add-btn" onclick="addVuelo(${p.id});event.stopPropagation()"><i class="ti ti-plus"></i> Agregar embarque</button>
+      </div>
     </div>`;
   });
   $('panel-vuelos').innerHTML=`<h2>Embarques ${tabNoteHtml('vuelos')}</h2>${state.personas.length===0?'<p style="color:var(--color-text-secondary)">Agregá viajeros desde el Resumen para gestionar embarques.</p>':sections.join('')}`;
