@@ -1282,7 +1282,7 @@ function renderVuelos(){
     const sc=_vuSortState[String(p.id)]||null;
     const isCollapsed=_vuCollapsed.has(String(p.id));
     const total=list.filter(v=>v.checked).reduce((s,v)=>s+(v.precio||0)+(v.tramos||[]).reduce((st,t)=>st+(t.precio||0),0),0);
-    const totalBadge=total>0?`<span style="font-size:11px;color:#22d685;font-weight:600;background:rgba(34,214,133,0.1);border:1px solid rgba(34,214,133,0.25);border-radius:10px;padding:1px 8px;margin-left:8px;vertical-align:middle">$${fmt(total)}</span>`:'';
+    const totalBadge=total>0?`<span style="font-size:16.5px;color:#22d685;font-weight:600;background:rgba(34,214,133,0.1);border:1px solid rgba(34,214,133,0.25);border-radius:10px;padding:1px 8px;margin-left:8px;vertical-align:middle">$${fmt(total)}</span>`:'';
     const sortBtns=list.length>1?[
       {k:'added',l:'Agregado'},{k:'nombre',l:'Nombre'},{k:'fecha',l:'Ida'},{k:'costo',l:'Precio'},
     ].map(({k,l})=>{const on=sc&&sc.key===k;return`<button class="sort-btn${on?' sort-active':''}" onclick="sortVuelos(${p.id},'${k}');event.stopPropagation()">${l}${on?(sc.asc?' ↑':' ↓'):''}</button>`;}).join(''):'';
