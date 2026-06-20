@@ -37,7 +37,7 @@ body::-webkit-scrollbar{display:none}
 .tab.active{color:#041a10;background:#1D9E75;border-color:#1D9E75;box-shadow:0 0 14px rgba(29,158,117,0.4);font-weight:700}
 .tab:hover:not(.active){color:var(--color-text-primary);background:rgba(90,140,210,0.07);border-color:rgba(90,140,210,0.14)}
 .panel{display:none}.panel.active{display:block}
-.card{background:#2C343E;border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:.75rem;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 4px 24px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.03);transition:border-color .2s;overflow:hidden}
+.card{background:#2C343E;border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:.75rem;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 4px 24px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.03);transition:border-color .2s,transform .18s ease;overflow:hidden;position:relative}
 .info-drop{max-height:0;overflow:hidden;opacity:0;transition:max-height .28s ease,opacity .22s ease}
 .info-drop.info-drop-open{max-height:800px;opacity:1}
 .card:hover{border-color:rgba(90,140,210,0.2)}
@@ -48,6 +48,12 @@ body::-webkit-scrollbar{display:none}
 .card-price-main{font-size:17px;font-weight:600;color:#22d685;line-height:1.1;white-space:nowrap}
 .card-price-sub{font-size:10px;color:var(--color-text-secondary);margin-top:2px;white-space:nowrap}
 .card-row{display:flex;align-items:flex-start;gap:12px}
+.drag-handle{color:var(--color-text-tertiary);cursor:grab;flex-shrink:0;display:flex;align-items:center;padding-top:2px;opacity:.5;transition:opacity .15s}
+.drag-handle:hover{opacity:1}
+.drag-handle:active{cursor:grabbing}
+.card-dragging{opacity:0.75;border-color:#1D9E75 !important;border-style:solid !important;box-shadow:0 0 14px rgba(29,158,117,0.35) !important}
+.card-drag-over{}
+.cal-day.cal-disabled{opacity:0.2;cursor:not-allowed;pointer-events:none}
 .card-body{flex:1;min-width:0}
 .item-name{font-weight:500;font-size:14px;margin-bottom:4px;word-break:break-word}
 .item-meta{font-size:12px;color:var(--color-text-secondary);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -193,7 +199,7 @@ function migrateState(s){
   }
   if(!s.personas)s.personas=[];
   if(!s.vuelos||Array.isArray(s.vuelos))s.vuelos={};
-  else Object.keys(s.vuelos).forEach(k=>{s.vuelos[k]=s.vuelos[k].map(v=>({descripcion:'',notas:'',horaPartida:'',horaLlegada:'',tramos:[],...v,tramos:(v.tramos||[]).map(t=>({horaPartida:'',horaLlegada:'',...t}))}));});
+  else Object.keys(s.vuelos).forEach(k=>{s.vuelos[k]=s.vuelos[k].map(v=>({descripcion:'',notas:'',horaPartida:'',horaLlegada:'',fechaLlegada:'',horaPartidaVuelta:'',horaLlegadaVuelta:'',fechaLlegadaVuelta:'',tramos:[],...v,tramos:(v.tramos||[]).map(t=>({horaPartida:'',horaLlegada:'',fechaLlegada:'',...t}))}));});
   if(!s.tripName)s.tripName='Mi Viaje';
   if(s.tripDate===undefined)s.tripDate='';
   if(!s.ski)s.ski={dias:[],pase:[],equipo:[],ropa:[]};
@@ -246,6 +252,83 @@ function toggleParticipante(actId,personaId){
 }
 let _particExpanded=new Set();
 function toggleParticOpen(key,panel){_particExpanded.has(key)?_particExpanded.delete(key):_particExpanded.add(key);renderPanel(panel);}
+let _drag={src:null,col:null,extra:null};
+function _getDragArr(col,extra){
+  if(col==='vuelos')return state.vuelos[String(extra)]||[];
+  if(col==='hospedaje')return state.hospedaje;
+  if(col==='actividades')return state.actividades;
+  if(col==='traslados')return state.traslados;
+  if(col==='ski-dias')return state.ski.dias||[];
+  if(col.startsWith('ski-'))return state.ski[col.slice(4)]||[];
+  if(col.startsWith('ct-')){const p=col.split('-');const ct=(state.customTabs||[]).find(t=>t.id===p[1]);const sec=(ct?.secciones||[]).find(s=>s.id===parseInt(p[2]));return sec?.items||[];}
+  return[];
+}
+function _setDragArr(col,extra,arr){
+  if(col==='vuelos'){state.vuelos[String(extra)]=arr;}
+  else if(col==='hospedaje')state.hospedaje=arr;
+  else if(col==='actividades')state.actividades=arr;
+  else if(col==='traslados')state.traslados=arr;
+  else if(col==='ski-dias')state.ski.dias=arr;
+  else if(col.startsWith('ski-'))state.ski[col.slice(4)]=arr;
+  else if(col.startsWith('ct-')){const p=col.split('-');const ct=(state.customTabs||[]).find(t=>t.id===p[1]);const sec=(ct?.secciones||[]).find(s=>s.id===parseInt(p[2]));if(sec)sec.items=arr;}
+}
+function _renderDragCol(col){
+  if(col==='vuelos'){renderVuelos();renderResumen();}
+  else if(col==='hospedaje'){renderHospedaje();renderResumen();}
+  else if(col==='actividades'){renderActividades();renderResumen();}
+  else if(col==='traslados'){renderTraslados();renderResumen();}
+  else if(col==='ski-dias'||col.startsWith('ski-')){renderSki();renderResumen();}
+  else if(col.startsWith('ct-')){renderCustomTab(col.split('-')[1]);renderResumen();}
+}
+function dragStart(e,col,id,extra){
+  _drag={src:id,col,extra,srcH:e.currentTarget.offsetHeight+10,overId:null};
+  e.dataTransfer.effectAllowed='move';
+  const blank=new Image();
+  blank.src='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  e.dataTransfer.setDragImage(blank,0,0);
+  setTimeout(()=>e.currentTarget.classList.add('card-dragging'),0);
+}
+function dragOver(e){e.preventDefault();e.dataTransfer.dropEffect='move';}
+function dragEnter(e,col,id){
+  if(_drag.col!==col||_drag.src===id)return;
+  if(_drag.overId===id)return;
+  _drag.overId=id;
+  const parent=e.currentTarget.parentElement;
+  const cards=Array.from(parent.querySelectorAll(':scope>.card[data-drag-id]'));
+  const srcIdx=cards.findIndex(c=>+c.dataset.dragId===_drag.src);
+  const dstIdx=cards.findIndex(c=>+c.dataset.dragId===id);
+  if(srcIdx<0||dstIdx<0)return;
+  const h=_drag.srcH||80;
+  cards.forEach((card,i)=>{
+    let shift=0;
+    if(i===srcIdx){shift=(dstIdx-srcIdx)*h;}
+    else if(srcIdx<dstIdx){if(i>srcIdx&&i<=dstIdx)shift=-h;}
+    else{if(i>=dstIdx&&i<srcIdx)shift=h;}
+    card.style.transform=shift?`translateY(${shift}px)`:'';
+  });
+}
+function dragLeave(e){}
+function dragDrop(e,col,id,extra){
+  e.preventDefault();
+  if(!_drag.src||_drag.col!==col)return;
+  const targetId=_drag.overId!==null?_drag.overId:id;
+  if(!targetId||targetId===_drag.src)return;
+  const arr=_getDragArr(col,extra);
+  const from=arr.findIndex(i=>i.id===_drag.src);
+  const to=arr.findIndex(i=>i.id===targetId);
+  if(from<0||to<0)return;
+  const[item]=arr.splice(from,1);
+  arr.splice(to,0,item);
+  _setDragArr(col,extra,arr);
+  saveState();
+  _renderDragCol(col);
+}
+function dragEnd(e){
+  document.querySelectorAll('.card-dragging').forEach(el=>{el.classList.remove('card-dragging');});
+  document.querySelectorAll('.card[data-drag-id]').forEach(c=>{c.style.transform='';});
+  _drag={src:null,col:null,extra:null,srcH:80,overId:null};
+}
+const _dh=`<div class="drag-handle" onclick="event.stopPropagation()" title="Arrastrar para reordenar"><i class="ti ti-grip-vertical" style="font-size:15px"></i></div>`;
 let _infoExpanded=new Set();
 function toggleInfoDrop(key,panel){
   const el=document.querySelector(`.info-drop[data-key="${key}"]`);
@@ -268,15 +351,22 @@ function infoDropHtml(key,rows,extra){
 }
 function vuMetaHtml(v){
   const fd=d=>/^\d{4}-\d{2}-\d{2}$/.test(d)?fmtDate(d):d;
+  const arrTime=(hp,hl,fl)=>{
+    if(!hp&&!hl)return'';
+    let s='';
+    if(hp)s+=` ${hp}`;
+    if(hl){s+=hp?' - ':' ';if(fl&&/^\d{4}-\d{2}-\d{2}$/.test(fl))s+=fmtDate(fl)+' ';s+=hl;}
+    return s;
+  };
   const p=[];
   if(v.descripcion)p.push(`<span style="color:var(--color-text-secondary)">${v.descripcion}</span>`);
-  if(v.fechaIda)p.push(`<span>Ida: ${fd(v.fechaIda)}${v.horaPartida?' '+v.horaPartida:''}</span>`);
-  if(v.fechaVuelta)p.push(`<span>Vuelta: ${fd(v.fechaVuelta)}${v.horaLlegada?' '+v.horaLlegada:''}</span>`);
+  if(v.fechaIda)p.push(`<span>Ida: ${fd(v.fechaIda)}${arrTime(v.horaPartida,v.horaLlegada,v.fechaLlegada)}</span>`);
+  if(v.fechaVuelta)p.push(`<span>Vuelta: ${fd(v.fechaVuelta)}${arrTime(v.horaPartidaVuelta,v.horaLlegadaVuelta,v.fechaLlegadaVuelta)}</span>`);
   if(v.notas)p.push(`<span style="color:var(--color-text-secondary);font-style:italic">${v.notas}</span>`);
   (v.tramos||[]).forEach(t=>{
     const tp=[];
     if(t.descripcion)tp.push(`<span style="color:var(--color-text-secondary)">${t.descripcion}</span>`);
-    if(t.fechaIda)tp.push(`<span>Ida: ${fd(t.fechaIda)}${t.horaPartida?' '+t.horaPartida:''}</span>`);
+    if(t.fechaIda)tp.push(`<span>Ida: ${fd(t.fechaIda)}${arrTime(t.horaPartida,t.horaLlegada,t.fechaLlegada)}</span>`);
     if(t.notas)tp.push(`<span style="color:var(--color-text-secondary);font-style:italic">${t.notas}</span>`);
     if(tp.length){p.push(`<span style="color:#22d685;font-weight:700;padding:0 2px">|</span>`);p.push(...tp);}
   });
@@ -285,11 +375,18 @@ function vuMetaHtml(v){
 }
 function vuInfoDrop(key,v){
   const fd=d=>/^\d{4}-\d{2}-\d{2}$/.test(d)?fmtDate(d):d;
+  const isIso=d=>/^\d{4}-\d{2}-\d{2}$/.test(d||'');
+  const withTimes=(date,hp,hl,fl)=>{
+    let s=fd(date);
+    if(hp)s+=' · '+hp;
+    if(hl)s+=' → '+(isIso(fl)?fd(fl)+' ':'')+hl;
+    return s;
+  };
   const rows=[];
   if(v.descripcion)rows.push({label:'Descripción',value:v.descripcion});
   if(v.aerolinea)rows.push({label:'Empresa',value:v.aerolinea});
-  if(v.fechaIda)rows.push({label:'Ida',value:fd(v.fechaIda)+(v.horaPartida?' · '+v.horaPartida:'')});
-  if(v.fechaVuelta)rows.push({label:'Vuelta',value:fd(v.fechaVuelta)+(v.horaLlegada?' · '+v.horaLlegada:'')});
+  if(v.fechaIda)rows.push({label:'Ida',value:withTimes(v.fechaIda,v.horaPartida,v.horaLlegada,v.fechaLlegada)});
+  if(v.fechaVuelta)rows.push({label:'Vuelta',value:withTimes(v.fechaVuelta,v.horaPartidaVuelta,v.horaLlegadaVuelta,v.fechaLlegadaVuelta)});
   if(v.precio)rows.push({label:'Precio',value:'$'+fmt(v.precio),color:'#22d685'});
   if(v.link)rows.push({label:'Link',html:`<a href="${v.link}" target="_blank" style="color:#00cce0;text-decoration:none;word-break:break-all">${v.link}</a>`,value:'_'});
   if(v.notas)rows.push({label:'Notas',value:v.notas});
@@ -297,8 +394,7 @@ function vuInfoDrop(key,v){
     const tr=[];
     if(t.nombre)tr.push({label:'Nombre',value:t.nombre});
     if(t.aerolinea)tr.push({label:'Empresa',value:t.aerolinea});
-    if(t.fechaIda)tr.push({label:'Ida',value:fd(t.fechaIda)+(t.horaPartida?' · '+t.horaPartida:'')});
-    if(t.horaLlegada)tr.push({label:'Llegada',value:t.horaLlegada});
+    if(t.fechaIda)tr.push({label:'Ida',value:withTimes(t.fechaIda,t.horaPartida,t.horaLlegada,t.fechaLlegada)});
     if(t.precio)tr.push({label:'Precio',value:'$'+fmt(t.precio),color:'#22d685'});
     if(t.notas)tr.push({label:'Notas',value:t.notas});
     if(t.link)tr.push({label:'Link',html:`<a href="${t.link}" target="_blank" style="color:#00cce0;text-decoration:none">${t.link}</a>`,value:'_'});
@@ -517,18 +613,20 @@ function smartCalStart(){
   if(!dates.length){const n=new Date();return{year:n.getFullYear(),month:n.getMonth()};}
   const today=new Date();today.setHours(0,0,0,0);
   const nearest=dates.map(d=>new Date(d+'T00:00:00')).sort((a,b)=>Math.abs(a-today)-Math.abs(b-today))[0];
-  let year=nearest.getFullYear(),month=nearest.getMonth();
-  if(nearest.getDate()<=15){month--;if(month<0){month=11;year--;}}
-  return{year,month};
+  return{year:nearest.getFullYear(),month:nearest.getMonth()};
 }
-let _ipTarget=null,_ipCalId=null,_ipYear=0,_ipMonth=0;
+let _ipTarget=null,_ipCalId=null,_ipYear=0,_ipMonth=0,_ipMinDate=null;
 function openInlineCal(inputId,calId){
   const cal=document.getElementById(calId);if(!cal)return;
   if(_ipCalId===calId&&cal.style.display!=='none'){closeInlineCal();return;}
   if(_ipCalId)closeInlineCal();
   _ipTarget=inputId;_ipCalId=calId;
+  const ancestor=cal.closest('[data-min-from]');
+  if(ancestor){const fromId=ancestor.dataset.minFrom;_ipMinDate=fromId?(document.getElementById(fromId)?.value||null):null;}
+  else _ipMinDate=null;
   const{year,month}=smartCalStart();
   _ipYear=year;_ipMonth=month;
+  if(_ipMinDate){const md=new Date(_ipMinDate+'T00:00:00');if(md.getFullYear()>_ipYear||(md.getFullYear()===_ipYear&&md.getMonth()>_ipMonth)){_ipYear=md.getFullYear();_ipMonth=md.getMonth();}}
   cal.style.display='block';
   renderInlineCal();
 }
@@ -551,7 +649,8 @@ function renderInlineCal(){
   for(let i=0;i<firstDow;i++)cells.push('<div></div>');
   for(let d=1;d<=total;d++){
     const iso=`${_ipYear}-${String(_ipMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    cells.push(`<div class="cal-day${iso===curVal?' sel':''}" onclick="pickDate('${iso}')">${d}</div>`);
+    const isDisabled=_ipMinDate&&iso<_ipMinDate;
+    cells.push(`<div class="cal-day${iso===curVal?' sel':''}${isDisabled?' cal-disabled':''}"${isDisabled?'':` onclick="pickDate('${iso}')"`}>${d}</div>`);
   }
   cal.innerHTML=`<div style="background:#1a2535;border:1px solid rgba(90,140,210,0.22);border-radius:8px;padding:.625rem;margin-top:4px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
@@ -567,12 +666,19 @@ function renderInlineCal(){
 }
 function pickDate(iso){
   if(!_ipTarget)return;
-  const inp=document.getElementById(_ipTarget);if(inp)inp.value=iso;
-  const lbl=document.getElementById(_ipTarget+'-lbl');
+  const target=_ipTarget;
+  const inp=document.getElementById(target);if(inp)inp.value=iso;
+  const lbl=document.getElementById(target+'-lbl');
   if(lbl){lbl.textContent=fmtDate(iso);lbl.parentElement.style.color='var(--color-text-primary)';}
-  const xBtn=document.getElementById(_ipTarget+'-xbtn');
+  const xBtn=document.getElementById(target+'-xbtn');
   if(xBtn){xBtn.style.opacity='1';xBtn.style.pointerEvents='auto';}
+  const arrlbl=document.getElementById(target+'-arrlbl');
+  if(arrlbl)arrlbl.textContent=fmtDate(iso);
+  const picker=document.getElementById(target+'-picker');
+  if(picker)picker.style.display='none';
   closeInlineCal();
+  _syncArrBtns(target);
+  _filterArrTimeByDate(target);
 }
 function clearDateField(id){
   const inp=document.getElementById(id);if(inp)inp.value='';
@@ -580,13 +686,93 @@ function clearDateField(id){
   if(lbl){lbl.textContent='— elegir fecha —';lbl.parentElement.style.color='var(--color-text-tertiary)';}
   const xBtn=document.getElementById(id+'-xbtn');
   if(xBtn){xBtn.style.opacity='0';xBtn.style.pointerEvents='none';}
+  const arrlbl=document.getElementById(id+'-arrlbl');
+  if(arrlbl)arrlbl.textContent='';
   closeInlineCal();
+  _syncArrBtns(id);
+  _filterArrTimeByDate(id);
+}
+function _syncArrBtns(changedFromId){
+  document.querySelectorAll('[data-arr-from]').forEach(btn=>{
+    const fromId=btn.dataset.arrFrom;
+    if(!fromId||fromId!==changedFromId)return;
+    const fromVal=document.getElementById(fromId)?.value||'';
+    const enabled=!!fromVal;
+    btn.disabled=!enabled;
+    btn.style.opacity=enabled?'1':'0.35';
+    btn.style.pointerEvents=enabled?'':'none';
+    btn.title=enabled?'Elegir día de llegada':'Elegir la fecha de ida primero';
+    if(!enabled){
+      const aid=btn.dataset.arrDateId;
+      if(aid&&document.getElementById(aid)?.value){
+        const ai=document.getElementById(aid);if(ai)ai.value='';
+        const al=document.getElementById(aid+'-lbl');if(al){al.textContent='— elegir fecha —';al.parentElement.style.color='var(--color-text-tertiary)';}
+        const ax=document.getElementById(aid+'-xbtn');if(ax){ax.style.opacity='0';ax.style.pointerEvents='none';}
+        const ab=document.getElementById(aid+'-arrlbl');if(ab)ab.textContent='';
+        const ap=document.getElementById(aid+'-picker');if(ap)ap.style.display='none';
+        closeInlineCal();
+      }
+    }
+  });
 }
 function _updateTimeField(id){
   const h=document.getElementById(id+'-h')?.value||'';
   const m=document.getElementById(id+'-m')?.value||'';
   const el=document.getElementById(id);
   if(el)el.value=(h&&m)?h+':'+m:'';
+  _filterArrTime(id);
+}
+function _filterArrTime(depTimeId){
+  if(!depTimeId)return;
+  document.querySelectorAll(`select[data-arr-dep="${depTimeId}"]`).forEach(hSel=>{
+    const arrId=hSel.dataset.arrId;const arrDateId=hSel.dataset.arrDateId;
+    if(!arrId)return;
+    const mSel=document.getElementById(arrId+'-m');
+    const hidInp=document.getElementById(arrId);
+    const depTime=document.getElementById(depTimeId)?.value||'';
+    const[dh,dm]=depTime?depTime.split(':').map(Number):[null,null];
+    const isDiffDay=!!(arrDateId&&document.getElementById(arrDateId)?.value);
+    const noDepTime=!depTime;
+    const curH=hSel.value?parseInt(hSel.value):null;
+    const minH=(!isDiffDay&&dh!==null)?dh:0;
+    let hOpts='<option value="">HH</option>';
+    if(!noDepTime){for(let i=minH;i<24;i++){const v=String(i).padStart(2,'0');hOpts+=`<option value="${v}"${curH===i&&curH>=minH?' selected':''}>${v}</option>`;}}
+    hSel.innerHTML=hOpts;hSel.disabled=noDepTime;
+    if(noDepTime){hSel.style.opacity='0.5';}else{hSel.style.opacity='';}
+    if(!mSel)return;
+    const newH=hSel.value?parseInt(hSel.value):null;
+    const curM=mSel.value?parseInt(mSel.value):null;
+    const minM=(!isDiffDay&&newH!==null&&newH===dh&&dm!==null)?dm:0;
+    let mOpts='<option value="">MM</option>';
+    if(!noDepTime&&newH!==null){for(let i=0;i<60;i+=5){if(i<minM)continue;const v=String(i).padStart(2,'0');mOpts+=`<option value="${v}"${curM!==null&&Math.floor(curM/5)*5===i&&curM>=minM?' selected':''}>${v}</option>`;}}
+    mSel.innerHTML=mOpts;mSel.disabled=noDepTime||newH===null;
+    if(mSel.disabled){mSel.style.opacity='0.5';}else{mSel.style.opacity='';}
+    if(hidInp){const fH=hSel.value;const fM=mSel.value;hidInp.value=(fH&&fM)?fH+':'+fM:'';}
+  });
+}
+function _arrHourChange(arrTimeId,depTimeId){
+  const hSel=document.getElementById(arrTimeId+'-h');
+  const mSel=document.getElementById(arrTimeId+'-m');
+  const hidInp=document.getElementById(arrTimeId);
+  if(!hSel||!mSel)return;
+  const selH=hSel.value?parseInt(hSel.value):null;
+  const depTime=depTimeId?document.getElementById(depTimeId)?.value||'':'';
+  const[dh,dm]=depTime?depTime.split(':').map(Number):[null,null];
+  const arrDateId=hSel.dataset.arrDateId;
+  const isDiffDay=!!(arrDateId&&document.getElementById(arrDateId)?.value);
+  const minM=(!isDiffDay&&selH!==null&&selH===dh&&dm!==null)?dm:0;
+  const curM=mSel.value?parseInt(mSel.value):null;
+  let mOpts='<option value="">MM</option>';
+  if(selH!==null){for(let i=0;i<60;i+=5){if(i<minM)continue;const v=String(i).padStart(2,'0');mOpts+=`<option value="${v}"${curM!==null&&Math.floor(curM/5)*5===i&&curM>=minM?' selected':''}>${v}</option>`;}}
+  mSel.innerHTML=mOpts;mSel.disabled=selH===null;
+  if(mSel.disabled){mSel.style.opacity='0.5';}else{mSel.style.opacity='';}
+  const fH=hSel.value;const fM=mSel.value;
+  if(hidInp)hidInp.value=(fH&&fM)?fH+':'+fM:'';
+}
+function _filterArrTimeByDate(dateId){
+  document.querySelectorAll(`select[data-arr-date-id="${dateId}"]`).forEach(hSel=>{
+    const depId=hSel.dataset.arrDep;if(depId)_filterArrTime(depId);
+  });
 }
 function timeSelectHtml(id,value,label){
   const [hPart,mPart]=(value||'').split(':');
@@ -601,6 +787,50 @@ function timeSelectHtml(id,value,label){
       <input type="hidden" id="${id}" value="${value||''}">
     </div>
   </div>`;
+}
+function _toggleArrDatePicker(id){
+  const picker=document.getElementById(id+'-picker');
+  if(!picker)return;
+  if(picker.style.display==='none'){picker.style.display='';}
+  else{picker.style.display='none';closeInlineCal();}
+}
+function arrivalTimeHtml(timeId,timeValue,dateId,dateValue,label,fromDateId,fromDateValue,depTimeId,depTimeValue){
+  const isIso=/^\d{4}-\d{2}-\d{2}$/.test(dateValue||'');
+  const dateDisplay=isIso?fmtDate(dateValue):'';
+  const btnDisabled=!!(fromDateId&&!fromDateValue);
+  const[dhStr,dmStr]=(depTimeValue||'').split(':');
+  const depH=dhStr?parseInt(dhStr):null;const depM=dmStr?parseInt(dmStr):null;
+  const hasDepTime=!!(depTimeId&&depTimeValue);
+  const noDepTime=!!(depTimeId&&!depTimeValue);
+  const[chStr,cmStr]=(timeValue||'').split(':');
+  const curH=chStr?parseInt(chStr):null;const curM=cmStr?parseInt(cmStr):null;
+  const minH=(!isIso&&hasDepTime&&depH!==null)?depH:0;
+  const curHValid=curH!==null&&curH>=minH;
+  let hours='';
+  if(!noDepTime){for(let i=minH;i<24;i++){const v=String(i).padStart(2,'0');hours+=`<option value="${v}"${curHValid&&curH===i?' selected':''}>${v}</option>`;}}
+  const curHForMins=curHValid?curH:null;
+  let mins='';
+  if(!noDepTime&&curHForMins!==null){
+    const minMForH=(!isIso&&hasDepTime&&curHForMins===depH&&depM!==null)?depM:0;
+    const curMValid=curM!==null&&curM>=minMForH;
+    for(let i=0;i<60;i+=5){if(i<minMForH)continue;const v=String(i).padStart(2,'0');mins+=`<option value="${v}"${curMValid&&Math.floor(curM/5)*5===i?' selected':''}>${v}</option>`;}
+  }
+  const hDis=noDepTime;const mDis=noDepTime||curHForMins===null;
+  return`<div class="form-group"><label style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+    <span>${label}</span>
+    <span id="${dateId}-arrlbl" style="font-size:11px;color:#22d685;font-weight:500">${dateDisplay}</span>
+    <button type="button" onclick="_toggleArrDatePicker('${dateId}')" ${fromDateId?`data-arr-from="${fromDateId}" data-arr-date-id="${dateId}"`:''}${btnDisabled?' disabled':''} title="${btnDisabled?'Elegir la fecha de ida primero':'Elegir día de llegada'}" style="background:none;border:1px solid rgba(90,140,210,0.3);border-radius:5px;padding:1px 6px;cursor:${btnDisabled?'default':'pointer'};color:var(--color-text-secondary);display:inline-flex;align-items:center;gap:2px;flex-shrink:0;opacity:${btnDisabled?'0.35':'1'}${btnDisabled?';pointer-events:none':''}"><i class="ti ti-calendar" style="font-size:12px"></i></button>
+  </label>
+  <div style="display:flex;align-items:center;gap:4px">
+    <select id="${timeId}-h" data-arr-dep="${depTimeId||''}" data-arr-id="${timeId}" data-arr-date-id="${dateId}" onchange="_arrHourChange('${timeId}','${depTimeId||''}')" ${hDis?'disabled':''} style="flex:1;${hDis?'opacity:.5':''}"><option value="">HH</option>${hours}</select>
+    <span style="color:var(--color-text-secondary);font-weight:500">:</span>
+    <select id="${timeId}-m" onchange="_updateTimeField('${timeId}')" ${mDis?'disabled':''} style="flex:1;${mDis?'opacity:.5':''}"><option value="">MM</option>${mins}</select>
+    <input type="hidden" id="${timeId}" value="${timeValue||''}">
+  </div>
+  <div id="${dateId}-picker" data-min-from="${fromDateId||''}" style="margin-top:6px;${isIso?'':'display:none'}">
+    ${dateFieldHtml(dateId,dateValue,'Día de llegada')}
+  </div>
+</div>`;
 }
 function dateFieldHtml(id,value,label){
   const isIso=/^\d{4}-\d{2}-\d{2}$/.test(value||'');
@@ -661,7 +891,8 @@ function renderSkiDias(){
   return`<div style="margin-bottom:1.5rem">
     <div class="section-header"><h3>Días de ski</h3><button class="btn-icon" onclick="openSkiCalendar()" title="Elegir días" style="font-size:18px"><i class="ti ti-calendar"></i></button></div>
     ${dias.length===0?'<p style="font-size:12px;color:var(--color-text-tertiary);padding:.5rem 0">Sin días planificados. Agregá uno para que aparezca en el itinerario.</p>':''}
-    ${dias.map(d=>`<div class="card"><div class="card-row">
+    ${dias.map(d=>`<div class="card" draggable="true" data-drag-id="${d.id}" ondragstart="dragStart(event,'ski-dias',${d.id},0)" ondragover="dragOver(event)" ondragenter="dragEnter(event,'ski-dias',${d.id})" ondragleave="dragLeave(event)" ondrop="dragDrop(event,'ski-dias',${d.id},0)" ondragend="dragEnd(event)"><div class="card-row">
+      ${_dh}
       <i class="ti ti-mountain" style="font-size:18px;color:var(--color-text-secondary);flex-shrink:0;margin-top:2px"></i>
       <div class="card-body">
         <div class="item-name">${d.fecha?fmtDate(d.fecha):'Sin fecha'}</div>
@@ -996,7 +1227,8 @@ function renderVuelos(){
       ${list.map(v=>{
         const vKey='vu-'+p.id+'-'+v.id;
         const vDrop=vuInfoDrop(vKey,v);
-        return`<div class="card${v.checked?' done':''}"><div class="card-row" onclick="toggleInfoDrop('${vKey}','vuelos')" style="cursor:pointer">
+        return`<div class="card${v.checked?' done':''}" draggable="true" data-drag-id="${v.id}" ondragstart="dragStart(event,'vuelos',${v.id},${p.id})" ondragover="dragOver(event)" ondragenter="dragEnter(event,'vuelos',${v.id})" ondragleave="dragLeave(event)" ondrop="dragDrop(event,'vuelos',${v.id},${p.id})" ondragend="dragEnd(event)"><div class="card-row" onclick="toggleInfoDrop('${vKey}','vuelos')" style="cursor:pointer">
+          ${_dh}
           <div class="checkbox${v.checked?' checked':''}" onclick="toggleVuelo(${p.id},${v.id});event.stopPropagation()"></div>
           <div class="card-body">
             <div class="item-name">${v.nombre}${v.checked?'<span class="selected-badge">Seleccionado</span>':''}</div>
@@ -1036,8 +1268,9 @@ function renderHospedaje(){
       {label:'Link',html:h.link?`<a href="${h.link}" target="_blank" style="color:#00cce0;text-decoration:none;word-break:break-all">${h.link}</a>`:'',value:h.link?'_':''},
       {label:'Notas',value:h.notas||''},
     ]);
-    return`<div class="card${h.checked?' done':''}">
+    return`<div class="card${h.checked?' done':''}" draggable="true" data-drag-id="${h.id}" ondragstart="dragStart(event,'hospedaje',${h.id},0)" ondragover="dragOver(event)" ondragenter="dragEnter(event,'hospedaje',${h.id})" ondragleave="dragLeave(event)" ondrop="dragDrop(event,'hospedaje',${h.id},0)" ondragend="dragEnd(event)">
       <div class="card-row" onclick="toggleInfoDrop('${hKey}','hospedaje')" style="cursor:pointer">
+        ${_dh}
         <div class="checkbox${h.checked?' checked':''}" onclick="toggleItem('hospedaje',${h.id});event.stopPropagation()"></div>
         <div class="card-body"><div class="item-name">${h.nombre}${h.checked?'<span class="selected-badge">Seleccionado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
         <div class="item-meta"><span class="badge ${platformBadge(h.plataforma)}">${h.plataforma}</span>
@@ -1081,8 +1314,9 @@ function skiSection(key,defaultTitle){
       {label:'Link',html:item.link?`<a href="${item.link}" target="_blank" style="color:#00cce0;text-decoration:none;word-break:break-all">${item.link}</a>`:'',value:item.link?'_':''},
       {label:'Notas',value:item.notas||''},
     ]);
-    return`<div class="card${item.checked?' done':''}">
+    return`<div class="card${item.checked?' done':''}" draggable="true" data-drag-id="${item.id}" ondragstart="dragStart(event,'ski-${key}',${item.id},0)" ondragover="dragOver(event)" ondragenter="dragEnter(event,'ski-${key}',${item.id})" ondragleave="dragLeave(event)" ondrop="dragDrop(event,'ski-${key}',${item.id},0)" ondragend="dragEnd(event)">
       <div class="card-row" onclick="toggleInfoDrop('${skiKey}','ski')" style="cursor:pointer">
+        ${_dh}
         <div class="checkbox${item.checked?' checked':''}" onclick="toggleSki('${key}',${item.id});event.stopPropagation()"></div>
         <div class="card-body"><div class="item-name">${item.nombre}${item.checked?'<span class="selected-badge">Seleccionado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
         <div class="item-meta">${item.descripcion?`<span style="color:var(--color-text-secondary)">${item.descripcion}</span>`:''}
@@ -1151,8 +1385,9 @@ function renderActividades(){
       {label:'Link',html:a.link?`<a href="${a.link}" target="_blank" style="color:#00cce0;text-decoration:none;word-break:break-all">${a.link}</a>`:'',value:a.link?'_':''},
       {label:'Notas',value:a.notas||''},
     ]);
-    return`<div class="card${a.checked?' done':''}">
+    return`<div class="card${a.checked?' done':''}" draggable="true" data-drag-id="${a.id}" ondragstart="dragStart(event,'actividades',${a.id},0)" ondragover="dragOver(event)" ondragenter="dragEnter(event,'actividades',${a.id})" ondragleave="dragLeave(event)" ondrop="dragDrop(event,'actividades',${a.id},0)" ondragend="dragEnd(event)">
       <div class="card-row" onclick="toggleInfoDrop('${actKey}','actividades')" style="cursor:pointer">
+        ${_dh}
         <div class="checkbox${a.checked?' checked':''}" onclick="toggleItem('actividades',${a.id});event.stopPropagation()"></div>
         <div class="card-body"><div class="item-name">${a.nombre}${a.checked?'<span class="selected-badge">Confirmado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
         <div class="item-meta">${a.tipo?`<span class="badge badge-gray">${a.tipo}</span>`:''}
@@ -1193,8 +1428,9 @@ function renderTraslados(){
       {label:'Precio',value:t.precio>0?'$'+fmt(t.precio)+' '+(t.precioPP===false?'total':'p/p'):'',color:'#22d685'},
       {label:'Notas',value:t.notas||''},
     ]);
-    return`<div class="card${t.checked?' done':''}">
+    return`<div class="card${t.checked?' done':''}" draggable="true" data-drag-id="${t.id}" ondragstart="dragStart(event,'traslados',${t.id},0)" ondragover="dragOver(event)" ondragenter="dragEnter(event,'traslados',${t.id})" ondragleave="dragLeave(event)" ondrop="dragDrop(event,'traslados',${t.id},0)" ondragend="dragEnd(event)">
       <div class="card-row" onclick="toggleInfoDrop('${trKey}','traslados')" style="cursor:pointer">
+        ${_dh}
         <div class="checkbox${t.checked?' checked':''}" onclick="toggleItem('traslados',${t.id});event.stopPropagation()"></div>
         <div class="card-body"><div class="item-name">${t.nombre}${t.checked?'<span class="selected-badge">Confirmado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
         <div class="item-meta">${t.tipo?`<span class="badge badge-gray">${t.tipo}</span>`:''}
@@ -1274,6 +1510,7 @@ function saveTramoFields(){
     fechaIda:document.getElementById('tr'+i+'-fi')?.value||'',
     horaPartida:document.getElementById('tr'+i+'-hp')?.value||'',
     horaLlegada:document.getElementById('tr'+i+'-hl')?.value||'',
+    fechaLlegada:document.getElementById('tr'+i+'-fl')?.value||'',
     precio:parseFloat(document.getElementById('tr'+i+'-p')?.value)||0,
     link:document.getElementById('tr'+i+'-l')?.value||'',
     notas:document.getElementById('tr'+i+'-no')?.value||'',
@@ -1292,7 +1529,7 @@ function renderTramosSection(){
       ${dateFieldHtml('tr'+i+'-fi',t.fechaIda||'','Fecha')}
       <div class="form-row">
         <div>${timeSelectHtml('tr'+i+'-hp',t.horaPartida||'','Hora de partida')}</div>
-        <div>${timeSelectHtml('tr'+i+'-hl',t.horaLlegada||'','Hora de llegada')}</div>
+        <div>${arrivalTimeHtml('tr'+i+'-hl',t.horaLlegada||'','tr'+i+'-fl',t.fechaLlegada||'','Hora de llegada','tr'+i+'-fi',t.fechaIda||'','tr'+i+'-hp',t.horaPartida||'')}</div>
       </div>
       <div class="form-group"><label>Precio (ARS)</label><input id="tr${i}-p" type="number" value="${t.precio||0}"></div>
       <div class="form-group"><label>Link</label><input id="tr${i}-l" value="${t.link||''}" placeholder="https://..."></div>
@@ -1302,7 +1539,7 @@ function renderTramosSection(){
 }
 function addTramo(){
   saveTramoFields();
-  _editTramos.push({nombre:'',descripcion:'',aerolinea:'',fechaIda:'',precio:0,link:'',notas:''});
+  _editTramos.push({nombre:'',descripcion:'',aerolinea:'',fechaIda:'',fechaLlegada:'',precio:0,link:'',notas:''});
   const sec=document.getElementById('tramos-section');if(sec)sec.innerHTML=renderTramosSection();
 }
 function removeTramo(idx){
@@ -1326,20 +1563,22 @@ function vueloPriceBlock(v){
 
 function formVuelo(personaId,v){
   const p=state.personas.find(p=>p.id===personaId);
-  const isEdit=!!v;v=v||{nombre:'',descripcion:'',aerolinea:'',fechaIda:'',fechaVuelta:'',precio:'',link:'',notas:'',tramos:[]};
+  const isEdit=!!v;v=v||{nombre:'',descripcion:'',aerolinea:'',fechaIda:'',fechaVuelta:'',fechaLlegada:'',horaPartidaVuelta:'',horaLlegadaVuelta:'',fechaLlegadaVuelta:'',precio:'',link:'',notas:'',tramos:[]};
   _editTramos=[...(v.tramos||[])];
   openModal(`<h3>${isEdit?'Editar embarque':'Nuevo embarque'} — ${p?p.nombre:''}</h3>
     <div style="font-size:11px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">Tramo 1</div>
     <div class="form-group"><label>Nombre</label><input id="fn" value="${v.nombre}"></div>
     <div class="form-group"><label>Descripción</label><input id="fdesc" value="${v.descripcion||''}" placeholder="ej: Rosario → Bs As → Bariloche"></div>
     <div class="form-group"><label>Aerolínea / Empresa</label><input id="fa" value="${v.aerolinea}"></div>
-    <div class="form-row">
-      <div>${dateFieldHtml('fi',v.fechaIda||'','Fecha ida')}</div>
-      <div>${dateFieldHtml('fv',v.fechaVuelta||'','Fecha vuelta')}</div>
-    </div>
+    ${dateFieldHtml('fi',v.fechaIda||'','Fecha ida')}
     <div class="form-row">
       <div>${timeSelectHtml('fhp',v.horaPartida||'','Hora de partida')}</div>
-      <div>${timeSelectHtml('fhl',v.horaLlegada||'','Hora de llegada')}</div>
+      <div>${arrivalTimeHtml('fhl',v.horaLlegada||'','fll',v.fechaLlegada||'','Hora de llegada','fi',v.fechaIda||'','fhp',v.horaPartida||'')}</div>
+    </div>
+    <div data-min-from="fi">${dateFieldHtml('fv',v.fechaVuelta||'','Fecha vuelta')}</div>
+    <div class="form-row">
+      <div>${timeSelectHtml('fhpv',v.horaPartidaVuelta||'','Hora de partida (vuelta)')}</div>
+      <div>${arrivalTimeHtml('fhlv',v.horaLlegadaVuelta||'','fllv',v.fechaLlegadaVuelta||'','Hora de llegada (vuelta)','fv',v.fechaVuelta||'','fhpv',v.horaPartidaVuelta||'')}</div>
     </div>
     <div class="form-group"><label>Precio (ARS)</label><input id="fp" type="number" value="${v.precio}"></div>
     <div class="form-group"><label>Link</label><input id="fl" value="${v.link}" placeholder="https://..."></div>
@@ -1354,9 +1593,12 @@ function addVuelo(personaId){formVuelo(personaId,null);}
 function editVuelo(personaId,id){formVuelo(personaId,(state.vuelos[String(personaId)]||[]).find(v=>v.id===id));}
 function saveVuelo(personaId,id){
   saveTramoFields();
+  const hp=$('fhp').value;const hl=$('fhl').value;const fl=$('fll').value;
+  const fi=$('fi').value;const fv=$('fv').value;
+  if(fi&&fv&&fv<fi){alert('La fecha de vuelta no puede ser anterior a la fecha de ida.');return;}
   const k=String(personaId);
   if(!state.vuelos[k])state.vuelos[k]=[];
-  const n={nombre:$('fn').value,descripcion:$('fdesc').value.trim(),aerolinea:$('fa').value,fechaIda:$('fi').value,fechaVuelta:$('fv').value,horaPartida:$('fhp').value||'',horaLlegada:$('fhl').value||'',precio:parseFloat($('fp').value)||0,link:$('fl').value,notas:$('fnotas').value.trim(),tramos:_editTramos,checked:false};
+  const n={nombre:$('fn').value,descripcion:$('fdesc').value.trim(),aerolinea:$('fa').value,fechaIda:$('fi').value,horaPartida:hp,horaLlegada:hl,fechaLlegada:fl,fechaVuelta:$('fv').value,horaPartidaVuelta:$('fhpv').value||'',horaLlegadaVuelta:$('fhlv').value||'',fechaLlegadaVuelta:$('fllv').value||'',precio:parseFloat($('fp').value)||0,link:$('fl').value,notas:$('fnotas').value.trim(),tramos:_editTramos,checked:false};
   if(id){state.vuelos[k]=state.vuelos[k].map(v=>v.id===id?{...v,...n,id}:v);}else{state.vuelos[k].push({...n,id:nextId(state.vuelos[k])});}
   saveState();closeModal();renderVuelos();renderResumen();
 }
@@ -1608,8 +1850,9 @@ function renderCustomTab(tabId){
           {label:'Link',html:item.link?`<a href="${item.link}" target="_blank" style="color:#00cce0;text-decoration:none;word-break:break-all">${item.link}</a>`:'',value:item.link?'_':''},
           {label:'Notas',value:item.notas||''},
         ]);
-        return`<div class="card${item.checked?' done':''}">
+        return`<div class="card${item.checked?' done':''}" draggable="true" data-drag-id="${item.id}" ondragstart="dragStart(event,'ct-${tabId}-${s.id}',${item.id},0)" ondragover="dragOver(event)" ondragenter="dragEnter(event,'ct-${tabId}-${s.id}',${item.id})" ondragleave="dragLeave(event)" ondrop="dragDrop(event,'ct-${tabId}-${s.id}',${item.id},0)" ondragend="dragEnd(event)">
           <div class="card-row" onclick="toggleInfoDrop('${ctKey}','${tabId}')" style="cursor:pointer">
+            ${_dh}
             <div class="checkbox${item.checked?' checked':''}" onclick="toggleCustomItem('${tabId}','${s.id}',${item.id});event.stopPropagation()"></div>
             <div class="card-body">
               <div class="item-name">${item.nombre}${item.checked?'<span class="selected-badge">Seleccionado</span>':''}${hasSubset?`<span style="font-size:10px;color:#1D9E75;font-weight:500;margin-left:6px">${partic.length}/${state.personas.length} viajeros</span>`:''}</div>
